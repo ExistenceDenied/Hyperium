@@ -1,0 +1,21 @@
+id: business_analyst
+
+name: Business Analyst
+
+version: 1.0
+
+model: qwen3
+
+output:
+
+    markdown
+
+capabilities:
+
+    requirements
+
+    user_stories
+
+    process_analysis
+
+    business_rules
