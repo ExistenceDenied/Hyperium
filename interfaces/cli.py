@@ -384,52 +384,76 @@ def command_run(args, settings: Settings) -> int:
 
 AGENT_SYSTEM = (
     "You are Hyperium, an autonomous assistant that completes tasks on the "
-    "user's behalf. You have tools to read files, list directories and fetch "
-    "URLs. Use them to gather facts before answering — never guess at a file's "
-    "contents or a page's text. When you have enough information, give a clear, "
-    "complete answer. Do not describe what you would do; do it, then report "
-    "the result."
+    "user's behalf using the tools available to you. Gather facts with your "
+    "tools before answering — never guess at a file's contents, a page's text "
+    "or a system's state. Some tools change things and will ask the user for "
+    "approval first; if one is declined, find another way or say what you "
+    "need. When you have enough information, act, then report the result "
+    "clearly. Do not describe what you would do; do it."
 )
+
+
+def agent_tools(args, stack):
+    """
+    Assemble the toolset for a run, keeping any MCP servers open in ``stack``.
+
+    Local file tools first, then every tool advertised by the MCP servers in
+    the config. MCP servers are subprocesses, so they are entered into the
+    caller's ExitStack and closed when it unwinds.
+    """
+    from infrastructure.tools import read_only_tools, writable_tools
+
+    root = Path(args.root).resolve()
+    tools = writable_tools(root) if args.allow_writes else read_only_tools(root)
+
+    if getattr(args, "mcp", None):
+        from infrastructure.mcp.config import load_mcp_config
+        from infrastructure.mcp.mcp_client import McpClient
+        from infrastructure.mcp.mcp_toolset import connect_mcp_tools
+
+        for _name, spec in load_mcp_config(Path(args.mcp)).items():
+            client = stack.enter_context(
+                McpClient(spec.command, spec.args, env=spec.env)
+            )
+            tools.extend(connect_mcp_tools(client))
+
+    return tools
 
 
 def command_do(args, settings: Settings) -> int:
     """
     Hand the agent a task; it uses tools and reports the result.
 
-    This is the direct-task path: no mission or methodology. By default the
-    tools are read-only and the run is safe unattended. With --allow-writes the
-    agent may also change the filesystem, and every such action is held at the
-    approval gate — interactively by default, or auto-approved for a trusted
+    The direct-task path: no mission or methodology. Read-only file tools by
+    default. --allow-writes adds filesystem writes; --mcp connects external
+    tools (email, files, ...) from an MCP config. Every acting tool is held at
+    the approval gate — asked interactively, or auto-approved for a trusted
     unattended run.
     """
+    from contextlib import ExitStack
+
     from application.agent.agent_runner import AgentRunner
     from application.agent.approval_policies import AutoApproveApprover
     from core.agents.agent_result import StopReason
     from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
-    from infrastructure.tools import read_only_tools, writable_tools
     from interfaces.approval import ConsoleApprover
 
-    root = Path(args.root).resolve()
+    approver = AutoApproveApprover() if args.auto_approve else ConsoleApprover()
 
-    if args.allow_writes:
-        tools = writable_tools(root)
-        approver = AutoApproveApprover() if args.auto_approve else ConsoleApprover()
-    else:
-        tools = read_only_tools(root)
-        approver = None
+    with ExitStack() as stack:
+        runner = AgentRunner(
+            OllamaAgentProvider(
+                model=settings.model,
+                timeout_seconds=settings.llm_timeout_seconds,
+                temperature=settings.temperature,
+            ),
+            agent_tools(args, stack),
+            max_iterations=args.max_steps,
+            approver=approver,
+        )
 
-    runner = AgentRunner(
-        OllamaAgentProvider(
-            model=settings.model,
-            timeout_seconds=settings.llm_timeout_seconds,
-            temperature=settings.temperature,
-        ),
-        tools,
-        max_iterations=args.max_steps,
-        approver=approver,
-    )
-
-    result = runner.run(args.task, system=AGENT_SYSTEM)
+        # Runs inside the stack: MCP servers must stay alive for the whole run.
+        result = runner.run(args.task, system=AGENT_SYSTEM)
 
     if args.verbose and result.steps:
         print("Steps:")
@@ -446,6 +470,22 @@ def command_do(args, settings: Settings) -> int:
             file=sys.stderr,
         )
         return 1
+
+    return 0
+
+
+def command_tools(args, settings: Settings) -> int:
+    """List the tools an agent would have, local and MCP, and which need
+    approval."""
+    from contextlib import ExitStack
+
+    with ExitStack() as stack:
+        tools = agent_tools(args, stack)
+
+        print(f"{'TOOL':<22} {'APPROVAL':<10} DESCRIPTION")
+        for tool in tools:
+            gate = "required" if tool.requires_approval else "-"
+            print(f"{tool.name:<22} {gate:<10} {tool.description}")
 
     return 0
 
@@ -693,10 +733,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Approve every action without asking. Unattended runs only.",
     )
     do.add_argument(
+        "--mcp",
+        default=None,
+        help="Path to an MCP config; connects its servers' tools to the agent.",
+    )
+    do.add_argument(
         "--verbose",
         action="store_true",
         help="Show each tool call before the answer.",
     )
+
+    tools = sub.add_parser(
+        "tools",
+        help="List the tools an agent can use, and which need approval.",
+    )
+    tools.add_argument("--root", default=".")
+    tools.add_argument("--allow-writes", action="store_true", dest="allow_writes")
+    tools.add_argument("--mcp", default=None, help="Path to an MCP config.")
 
     resume = sub.add_parser("resume", help="Continue after an approval.")
     resume.add_argument("project_id")
@@ -777,6 +830,7 @@ def main(argv: list[str] | None = None) -> int:
         "launch": lambda: command_launch(args, settings),
         "run": lambda: command_run(args, settings),
         "do": lambda: command_do(args, settings),
+        "tools": lambda: command_tools(args, settings),
         "resume": lambda: command_resume(args, settings),
         "submit": lambda: command_submit(args, settings),
         "serve": lambda: command_serve(args, settings),
