@@ -37,10 +37,16 @@ class Project:
 
     @property
     def deliverables(self) -> list[Deliverable]:
-        if self.analysis is None:
+        """
+        The deliverables belong to the plan, not to the analysis.
+
+        ADR-002: analysis never creates execution plans. Reading them from
+        the analysis object made that rule false in the one place it mattered.
+        """
+        if self.execution_plan is None:
             return []
 
-        return list(self.analysis.deliverables)
+        return list(self.execution_plan.deliverables)
 
     @property
     def awaiting_approval(self) -> list[Deliverable]:

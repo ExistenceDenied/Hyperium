@@ -182,20 +182,14 @@ class ReviewApp:
         decision = form.get("decision", [""])[0]
         note = form.get("note", [""])[0].strip() or None
 
+        # The rules live in ProjectService, so the CLI and this page cannot
+        # drift apart on what approval means.
         if decision == "approve":
-            project.approve(key, summary=note)
+            self._service.approve(project, key, note=note)
         elif decision == "reject":
-            if not note:
-                return 400, pages.error_page(
-                    "Feedback is required when sending a deliverable back — "
-                    "it is passed to the model as the rework brief.",
-                    code=400,
-                )
-            project.request_changes(key, summary=note)
+            self._service.request_changes(project, key, note=note or "")
         else:
             return 400, pages.error_page("Unknown review decision.", code=400)
-
-        self._projects.save(project)
 
         return 303, f"/engagement/{project.id}"
 

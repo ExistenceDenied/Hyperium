@@ -6,8 +6,8 @@ from uuid import UUID
 from core.execution.activity import Activity
 from core.execution.deliverable import Deliverable
 from core.execution.deliverable_status import DeliverableStatus
-from core.methodologies.methodology import Methodology
-from core.methodologies.quality_gate import GateResult
+from core.execution.stage_plan import StagePlan
+from core.methodologies.quality_gate import DeliverableState, GateResult
 from core.resources.resource import Resource
 
 
@@ -24,7 +24,8 @@ class ExecutionPlan:
     activities: list[Activity] = field(default_factory=list)
     deliverables: list[Deliverable] = field(default_factory=list)
     allocations: dict[UUID, Resource] = field(default_factory=dict)
-    methodology: Methodology | None = None
+    stages: list[StagePlan] = field(default_factory=list)
+    methodology_key: str | None = None
 
     def add_activity(self, activity: Activity) -> None:
         if activity not in self.activities:
@@ -58,35 +59,48 @@ class ExecutionPlan:
             if deliverable.stage == stage_key
         ]
 
+    def stage(self, key: str) -> StagePlan | None:
+        for stage in self.stages:
+            if stage.key == key:
+                return stage
+
+        return None
+
+    def _state_of(self, deliverable: Deliverable) -> DeliverableState:
+        version = deliverable.latest_version()
+
+        return DeliverableState(
+            key=deliverable.key,
+            approved=deliverable.is_approved,
+            status=deliverable.status.value,
+            content=version.content if version else None,
+        )
+
     def gate_result(self, stage_key: str) -> GateResult:
         """
         Evaluate a stage's quality gate against what it actually produced.
 
-        A stage with no methodology or no gate passes trivially — an
-        engagement planned without a methodology behaves exactly as it did
-        before 2.0.
+        The gate comes from the plan, not from the methodology registry, so an
+        engagement in flight keeps the governance it was planned with even if
+        the methodology is later edited or removed.
         """
-        if self.methodology is None:
+        stage = self.stage(stage_key)
+
+        if stage is None or stage.quality_gate is None:
             return GateResult(True)
 
-        try:
-            stage = self.methodology.stage(stage_key)
-        except KeyError:
-            return GateResult(True)
-
-        if stage.quality_gate is None:
-            return GateResult(True)
-
-        return stage.quality_gate.evaluate(self.deliverables_in_stage(stage_key))
+        return stage.quality_gate.evaluate(
+            [
+                self._state_of(deliverable)
+                for deliverable in self.deliverables_in_stage(stage_key)
+            ]
+        )
 
     def open_gates(self) -> list[tuple[str, GateResult]]:
         """Stages whose work is finished but whose gate has not yet passed."""
-        if self.methodology is None:
-            return []
-
         blocked = []
 
-        for stage in self.methodology.stages:
+        for stage in self.stages:
             deliverables = self.deliverables_in_stage(stage.key)
 
             if not deliverables:
@@ -104,12 +118,12 @@ class ExecutionPlan:
 
     def _stage_is_open(self, stage_key: str | None) -> bool:
         """Whether work in a stage may begin, based on its upstream gates."""
-        if self.methodology is None or stage_key is None:
+        if stage_key is None:
             return True
 
-        try:
-            stage = self.methodology.stage(stage_key)
-        except KeyError:
+        stage = self.stage(stage_key)
+
+        if stage is None:
             return True
 
         return all(

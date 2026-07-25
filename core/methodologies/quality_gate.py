@@ -3,9 +3,23 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from core.execution.deliverable import Deliverable
-
 _WORDS = re.compile(r"\b\w+\b")
+
+
+@dataclass(frozen=True)
+class DeliverableState:
+    """
+    The facts a gate needs about one deliverable.
+
+    A gate evaluates *state*, not a Deliverable. Depending on the execution
+    package would make methodologies and execution mutually dependent, and
+    neither could then be understood or tested on its own.
+    """
+
+    key: str
+    approved: bool
+    status: str = ""
+    content: str | None = None
 
 
 @dataclass(frozen=True)
@@ -39,45 +53,44 @@ class QualityGate:
     minimum_words: int = 0
     required_sections: tuple[str, ...] = field(default_factory=tuple)
 
-    def evaluate(self, deliverables: list[Deliverable]) -> GateResult:
+    def evaluate(self, states: list[DeliverableState]) -> GateResult:
         failures: list[str] = []
 
-        if not deliverables:
+        if not states:
             return GateResult(False, ("The stage produced no deliverables.",))
 
-        for deliverable in deliverables:
-            failures.extend(self._check(deliverable))
+        for state in states:
+            failures.extend(self._check(state))
 
         return GateResult(not failures, tuple(failures))
 
-    def _check(self, deliverable: Deliverable) -> list[str]:
+    def _check(self, state: DeliverableState) -> list[str]:
         failures: list[str] = []
-        version = deliverable.latest_version()
 
-        if version is None:
-            return [f"'{deliverable.key}' has no content yet."]
+        if state.content is None:
+            return [f"'{state.key}' has no content yet."]
 
-        if self.require_approval and not deliverable.is_approved:
+        if self.require_approval and not state.approved:
             failures.append(
-                f"'{deliverable.key}' has not been approved "
-                f"(currently {deliverable.status.value})."
+                f"'{state.key}' has not been approved"
+                + (f" (currently {state.status})." if state.status else ".")
             )
 
         if self.minimum_words:
-            words = len(_WORDS.findall(version.content))
+            words = len(_WORDS.findall(state.content))
 
             if words < self.minimum_words:
                 failures.append(
-                    f"'{deliverable.key}' has {words} words; the gate "
+                    f"'{state.key}' has {words} words; the gate "
                     f"requires at least {self.minimum_words}."
                 )
 
-        lowered = version.content.lower()
+        lowered = state.content.lower()
 
         for section in self.required_sections:
             if section.lower() not in lowered:
                 failures.append(
-                    f"'{deliverable.key}' is missing the required section "
+                    f"'{state.key}' is missing the required section "
                     f"'{section}'."
                 )
 

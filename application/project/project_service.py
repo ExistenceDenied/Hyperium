@@ -48,10 +48,6 @@ class ProjectService:
         logger.info("Analysing mission '%s'.", mission.title)
         project.analysis = self._analysis_service.analyze(mission)
 
-        logger.info(
-            "Planning %s deliverable(s).",
-            len(project.analysis.deliverables),
-        )
         project.execution_plan = self._planning_service.create_execution_plan(
             project.analysis,
             resources,
@@ -59,6 +55,59 @@ class ProjectService:
         )
 
         return self._run(project)
+
+    def approve(
+        self,
+        project: Project,
+        deliverable_key: str,
+        note: str | None = None,
+    ) -> Project:
+        """
+        Record a human's approval of a deliverable.
+
+        Approval lives here, not in an interface. Both the CLI and the web
+        review UI perform the same governance act, and 12-interfaces.md states
+        the rule: if two interfaces would have to implement it, it belongs in
+        the domain. When it lived in the adapters they drifted — only one of
+        them required feedback on rejection.
+        """
+        project.approve(deliverable_key, summary=note)
+        logger.info(
+            "Deliverable '%s' approved on engagement %s.",
+            deliverable_key,
+            project.id,
+        )
+        self._persist(project)
+
+        return project
+
+    def request_changes(
+        self,
+        project: Project,
+        deliverable_key: str,
+        note: str,
+    ) -> Project:
+        """
+        Send a deliverable back for rework.
+
+        Feedback is mandatory: it becomes the brief the model reworks against,
+        so a rejection without it regenerates the same document blind.
+        """
+        if not note or not note.strip():
+            raise ValueError(
+                "Feedback is required when sending a deliverable back - it is "
+                "passed to the model as the rework brief."
+            )
+
+        project.request_changes(deliverable_key, summary=note.strip())
+        logger.info(
+            "Deliverable '%s' sent back on engagement %s.",
+            deliverable_key,
+            project.id,
+        )
+        self._persist(project)
+
+        return project
 
     def submit_work(
         self,

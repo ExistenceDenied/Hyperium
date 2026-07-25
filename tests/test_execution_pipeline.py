@@ -96,7 +96,7 @@ def test_an_explicit_mission_methodology_wins():
         mission=build_mission(methodology="test-single-stage"),
     )
 
-    assert project.execution_plan.methodology.key == "test-single-stage"
+    assert project.execution_plan.methodology_key == "test-single-stage"
 
 
 def test_planning_fails_when_no_methodology_can_be_selected():
@@ -173,13 +173,26 @@ def test_approving_opens_the_gate_and_the_next_stage_runs():
     assert resumed.deliverable("curriculum").latest_version() is not None
 
 
+def state_of(project, key):
+    from core.methodologies.quality_gate import DeliverableState
+
+    deliverable = project.deliverable(key)
+
+    return DeliverableState(
+        key=deliverable.key,
+        approved=deliverable.is_approved,
+        status=deliverable.status.value,
+        content=deliverable.latest_version().content,
+    )
+
+
 def test_a_gate_can_require_a_minimum_length():
     from core.methodologies.quality_gate import QualityGate
 
     project, _, _ = start()
     gate = QualityGate(require_approval=False, minimum_words=10_000)
 
-    result = gate.evaluate([project.deliverable("requirements")])
+    result = gate.evaluate([state_of(project, "requirements")])
 
     assert not result.passed
     assert "requires at least 10000" in result.failures[0]
@@ -191,7 +204,7 @@ def test_a_gate_can_require_a_section():
     project, _, _ = start()
     gate = QualityGate(require_approval=False, required_sections=("Budget",))
 
-    result = gate.evaluate([project.deliverable("requirements")])
+    result = gate.evaluate([state_of(project, "requirements")])
 
     assert not result.passed
     assert "missing the required section 'Budget'" in result.failures[0]

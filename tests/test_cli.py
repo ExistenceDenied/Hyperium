@@ -297,3 +297,22 @@ def test_a_malformed_constraint_is_rejected(monkeypatch, tmp_path, capsys):
         ["mission", "add", "X", "obj", "--constraint", "no-colon-here"]
     ) == 1
     assert "type:description" in capsys.readouterr().err
+
+
+def test_cli_reject_now_requires_feedback_like_the_web(monkeypatch, tmp_path, capsys):
+    """
+    Regression: approval logic lived in both adapters and they drifted — the
+    web required feedback on rejection and the CLI did not. Both now call
+    ProjectService, so they cannot disagree.
+    """
+    repository, _ = install_fake_context(monkeypatch, tmp_path)
+
+    run(["run", "BA Training", "Build a one-day training."])
+    project_id = str(repository.list_ids()[0])
+    capsys.readouterr()
+
+    assert run(["reject", project_id, "requirements"]) == 1
+    assert "Feedback is required" in capsys.readouterr().err
+
+    project = repository.load(repository.list_ids()[0])
+    assert not project.deliverable("requirements").is_approved

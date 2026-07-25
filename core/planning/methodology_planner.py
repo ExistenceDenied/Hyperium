@@ -6,6 +6,7 @@ from core.capabilities.capability_catalog import CapabilityCatalog
 from core.capabilities.capability_requirement import CapabilityRequirement
 from core.execution.activity import Activity
 from core.execution.deliverable import Deliverable
+from core.execution.stage_plan import StagePlan
 from core.methodologies.methodology import Methodology
 from core.missions.mission import Mission
 
@@ -24,6 +25,24 @@ class MethodologyPlanner:
     The planner is deterministic: the same methodology and mission produce the
     same deliverables, activities, capabilities and dependencies every time.
     """
+
+    def stages(self, methodology: Methodology) -> list[StagePlan]:
+        """
+        Copy the stage ordering and gates into the plan.
+
+        The plan owns its governance from this point on, so editing or
+        deleting the methodology cannot change the rules an engagement
+        already in flight is being held to.
+        """
+        return [
+            StagePlan(
+                key=stage.key,
+                name=stage.name,
+                depends_on=tuple(stage.depends_on),
+                quality_gate=stage.quality_gate,
+            )
+            for stage in methodology.stages
+        ]
 
     def build(
         self,

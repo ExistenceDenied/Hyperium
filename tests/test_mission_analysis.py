@@ -74,7 +74,9 @@ def test_the_analysis_does_not_produce_a_work_breakdown():
     """2.0's inversion: the methodology owns the work, not the model."""
     result = service().analyze(build_mission())
 
-    assert result.deliverables == []
+    # The field does not exist at all — ADR-002 forbids the analysis context
+    # from creating execution plans, so it carries no deliverables to create.
+    assert not hasattr(result, "deliverables")
 
 
 def test_the_prompt_offers_the_available_methodologies():

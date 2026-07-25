@@ -15,6 +15,8 @@ from core.execution.deliverable_status import DeliverableStatus
 from core.execution.deliverable_version import DeliverableVersion
 from core.execution.execution_plan import ExecutionPlan
 from core.execution.execution_result import ExecutionResult, ExecutionStatus
+from core.execution.stage_plan import StagePlan
+from core.methodologies.quality_gate import QualityGate
 from core.missions.mission import Mission
 from core.project.project import Project
 from core.resources.ai_resource import AIResource
@@ -25,7 +27,9 @@ from infrastructure.persistence.mission_serializer import MissionSerializer
 # 2: the embedded mission gained backlog identity and lifecycle.
 # 3: methodologies — deliverables carry a stage and sections, activities carry
 #    a technique, and the plan records which methodology produced it.
-SCHEMA_VERSION = 3
+# 4: the plan owns its deliverables and its stages, including the quality
+#    gates it was planned with. The analysis no longer carries deliverables.
+SCHEMA_VERSION = 4
 
 _RESOURCE_TYPES: dict[str, type[Resource]] = {
     "AIResource": AIResource,
@@ -43,15 +47,8 @@ class ProjectSerializer:
     engagement resumable.
     """
 
-    def __init__(
-        self,
-        missions: MissionSerializer | None = None,
-        methodologies=None,
-    ) -> None:
+    def __init__(self, missions: MissionSerializer | None = None) -> None:
         self._missions = missions or MissionSerializer()
-        # Methodologies are authored data, not project state: the plan stores
-        # the key and the definition is resolved from the registry on load.
-        self._methodologies = methodologies
 
     def to_dict(self, project: Project) -> dict[str, Any]:
         return {
@@ -72,24 +69,13 @@ class ProjectSerializer:
                 f"expected {SCHEMA_VERSION}."
             )
 
-        deliverables = [
-            self._read_deliverable(entry)
-            for entry in payload.get("analysis", {}).get("deliverables", [])
-        ]
-
-        by_key = {item.key: item for item in deliverables}
-
-        project = Project(
+        return Project(
             id=UUID(payload["id"]),
             mission=self._read_mission(payload["mission"]),
-            analysis=self._read_analysis(payload.get("analysis"), deliverables),
-            execution_plan=self._read_plan(
-                payload.get("execution_plan"), by_key
-            ),
+            analysis=self._read_analysis(payload.get("analysis")),
+            execution_plan=self._read_plan(payload.get("execution_plan")),
             execution_result=self._read_result(payload.get("execution_result")),
         )
-
-        return project
 
     # ---------------------------------------------------------------- write
 
@@ -106,9 +92,6 @@ class ProjectSerializer:
             "risks": list(analysis.risks),
             "recommended_methodology": analysis.recommended_methodology,
             "rationale": analysis.rationale,
-            "deliverables": [
-                self._deliverable(item) for item in analysis.deliverables
-            ],
         }
 
     def _deliverable(self, deliverable: Deliverable) -> dict[str, Any]:
@@ -165,11 +148,12 @@ class ProjectSerializer:
             return None
 
         return {
-            "methodology": (
-                plan.methodology.key if plan.methodology else None
-            ),
+            "methodology_key": plan.methodology_key,
+            "deliverables": [
+                self._deliverable(item) for item in plan.deliverables
+            ],
+            "stages": [self._stage(item) for item in plan.stages],
             "activity_order": [activity.key for activity in plan.activities],
-            "deliverable_order": [item.key for item in plan.deliverables],
             "allocations": [
                 {
                     "activity_key": activity.key,
@@ -178,6 +162,25 @@ class ProjectSerializer:
                 for activity in plan.activities
                 if activity.id in plan.allocations
             ],
+        }
+
+    def _stage(self, stage: StagePlan) -> dict[str, Any]:
+        gate = stage.quality_gate
+
+        return {
+            "key": stage.key,
+            "name": stage.name,
+            "depends_on": list(stage.depends_on),
+            "quality_gate": (
+                {
+                    "description": gate.description,
+                    "require_approval": gate.require_approval,
+                    "minimum_words": gate.minimum_words,
+                    "required_sections": list(gate.required_sections),
+                }
+                if gate
+                else None
+            ),
         }
 
     def _resource(self, resource: Resource) -> dict[str, Any]:
@@ -223,7 +226,6 @@ class ProjectSerializer:
     def _read_analysis(
         self,
         payload: dict[str, Any] | None,
-        deliverables: list[Deliverable],
     ) -> AnalysisResult | None:
         if payload is None:
             return None
@@ -232,7 +234,6 @@ class ProjectSerializer:
             summary=payload.get("summary", ""),
             assumptions=list(payload.get("assumptions", [])),
             risks=list(payload.get("risks", [])),
-            deliverables=deliverables,
             recommended_methodology=payload.get("recommended_methodology"),
             rationale=payload.get("rationale", ""),
         )
@@ -292,28 +293,39 @@ class ProjectSerializer:
     def _read_plan(
         self,
         payload: dict[str, Any] | None,
-        deliverables: dict[str, Deliverable],
     ) -> ExecutionPlan | None:
         if payload is None:
             return None
 
+        deliverables = [
+            self._read_deliverable(entry)
+            for entry in payload.get("deliverables", [])
+        ]
+
         by_key = {
             activity.key: activity
-            for deliverable in deliverables.values()
+            for deliverable in deliverables
             for activity in deliverable.activities
         }
 
         plan = ExecutionPlan(
-            deliverables=[
-                deliverables[key]
-                for key in payload.get("deliverable_order", [])
-                if key in deliverables
-            ]
+            deliverables=deliverables,
+            stages=[self._read_stage(entry) for entry in payload.get("stages", [])],
+            methodology_key=payload.get("methodology_key"),
         )
 
         for key in payload.get("activity_order", []):
-            if key in by_key:
-                plan.add_activity(by_key[key])
+            activity = by_key.get(key)
+
+            if activity is None:
+                # Silently dropping work would leave an engagement quietly
+                # smaller than the one that was saved.
+                raise ValueError(
+                    f"Saved plan references activity '{key}', which no "
+                    f"deliverable in the file provides."
+                )
+
+            plan.add_activity(activity)
 
         for entry in payload.get("allocations", []):
             activity = by_key.get(entry["activity_key"])
@@ -321,21 +333,26 @@ class ProjectSerializer:
             if activity is not None:
                 plan.assign(activity, self._read_resource(entry["resource"]))
 
-        plan.methodology = self._read_methodology(payload.get("methodology"))
-
         return plan
 
-    def _read_methodology(self, key: str | None):
-        if not key or self._methodologies is None:
-            return None
+    def _read_stage(self, payload: dict[str, Any]) -> StagePlan:
+        gate = payload.get("quality_gate")
 
-        try:
-            return self._methodologies.get(key)
-        except KeyError:
-            # A methodology may have been renamed or removed since the
-            # engagement was planned. The saved plan still holds every
-            # activity, so the engagement remains resumable without gates.
-            return None
+        return StagePlan(
+            key=payload["key"],
+            name=payload.get("name", ""),
+            depends_on=tuple(payload.get("depends_on", [])),
+            quality_gate=(
+                QualityGate(
+                    description=gate.get("description", ""),
+                    require_approval=gate.get("require_approval", True),
+                    minimum_words=int(gate.get("minimum_words", 0)),
+                    required_sections=tuple(gate.get("required_sections", [])),
+                )
+                if gate
+                else None
+            ),
+        )
 
     def _read_resource(self, payload: dict[str, Any]) -> Resource:
         resource_type = _RESOURCE_TYPES.get(payload["type"], AIResource)

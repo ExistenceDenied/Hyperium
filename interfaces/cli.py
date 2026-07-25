@@ -32,7 +32,6 @@ from infrastructure.methodologies.json_methodology_repository import (
 from infrastructure.observability.logging_setup import configure_logging
 from infrastructure.persistence.mission_repository import MissionRepository
 from infrastructure.persistence.project_repository import ProjectRepository
-from infrastructure.persistence.project_serializer import ProjectSerializer
 
 
 def build_context(settings: Settings):
@@ -48,10 +47,7 @@ def build_context(settings: Settings):
 
     methodologies = build_methodologies(settings)
 
-    repository = ProjectRepository(
-        settings.state_directory,
-        serializer=ProjectSerializer(methodologies=methodologies),
-    )
+    repository = ProjectRepository(settings.state_directory)
     store = FileArtifactStore(settings.workspace)
 
     service = ProjectBuilder.build(
@@ -119,8 +115,8 @@ def report(project: Project) -> None:
 
     plan = project.execution_plan
 
-    if plan is not None and plan.methodology is not None:
-        print(f"Methodology: {plan.methodology.name} ({plan.methodology.key})")
+    if plan is not None and plan.methodology_key:
+        print(f"Methodology: {plan.methodology_key}")
 
     print("\nDeliverables:")
 
@@ -414,16 +410,14 @@ def command_resume(args, settings: Settings) -> int:
 
 
 def command_review(args, settings: Settings, approve: bool) -> int:
-    _, repository = build_context(settings)
+    service, repository = build_context(settings)
 
     project = repository.load(UUID(args.project_id))
 
     if approve:
-        project.approve(args.deliverable, summary=args.note)
+        service.approve(project, args.deliverable, note=args.note)
     else:
-        project.request_changes(args.deliverable, summary=args.note)
-
-    repository.save(project)
+        service.request_changes(project, args.deliverable, note=args.note)
 
     verdict = "approved" if approve else "sent back for changes"
     print(f"Deliverable '{args.deliverable}' {verdict}.")

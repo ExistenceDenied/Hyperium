@@ -211,11 +211,10 @@ def engagement(project: Project, busy: bool = False, error: str = "") -> str:
 
     plan = project.execution_plan
 
-    if plan is not None and plan.methodology is not None:
+    if plan is not None and plan.methodology_key:
         body.append(
             f"<p class='muted'>Methodology: "
-            f"<strong>{esc(plan.methodology.name)}</strong> "
-            f"({esc(plan.methodology.key)})</p>"
+            f"<strong>{esc(plan.methodology_key)}</strong></p>"
         )
 
     current_stage = object()
@@ -298,11 +297,10 @@ def _stage_heading(plan, stage_key: str | None) -> str:
     gate = plan.gate_result(stage_key)
     name = stage_key
 
-    if plan.methodology is not None:
-        try:
-            name = plan.methodology.stage(stage_key).name
-        except KeyError:
-            pass
+    stage = plan.stage(stage_key)
+
+    if stage is not None and stage.name:
+        name = stage.name
 
     badge = (
         "<span class='pill ok'>gate passed</span>"

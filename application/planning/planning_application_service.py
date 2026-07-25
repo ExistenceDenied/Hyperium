@@ -48,6 +48,11 @@ class PlanningApplicationService:
         resources: list[Resource],
         mission: Mission | None = None,
     ) -> ExecutionPlan:
+        if mission is None:
+            raise PlanningError(
+                "An engagement cannot be planned without a mission."
+            )
+
         methodology = self._select(analysis, mission)
 
         if methodology is None:
@@ -58,17 +63,27 @@ class PlanningApplicationService:
                 "it does not invent them."
             )
 
-        if mission is not None:
-            analysis.deliverables = self._planner.build(methodology, mission)
+        # The plan owns the work. It is not written back into the analysis:
+        # ADR-002 says analysis never creates execution plans, and routing it
+        # through the analysis object made that literally false.
+        deliverables = self._planner.build(methodology, mission)
 
-        plan = self._planning_service.create_plan(analysis)
-        plan.methodology = methodology
+        plan = self._planning_service.create_plan(deliverables)
+        plan.stages = self._planner.stages(methodology)
+        plan.methodology_key = methodology.key
 
         for activity in plan.activities:
             resource = self._resource_allocator.allocate(activity, resources)
 
             if resource is not None:
                 plan.assign(activity, resource)
+
+        if not plan.activities:
+            raise PlanningError(
+                f"Methodology '{methodology.key}' produced no activities. "
+                f"An engagement with nothing to do is a planning failure, "
+                f"not a completed engagement."
+            )
 
         return plan
 

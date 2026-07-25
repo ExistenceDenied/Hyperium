@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from core.capabilities.capability_catalog import CapabilityCatalog
 from core.methodologies.methodology import (
     ActivityTemplate,
     DeliverableTemplate,
@@ -127,6 +128,7 @@ class JsonMethodologyRepository:
                 raise MethodologyError(f"{path.name}: {error}") from error
 
             self._reject_unknown_techniques(methodology, path)
+            self._reject_unknown_capabilities(methodology, path)
             self._methodologies[methodology.key] = methodology
 
             logger.debug("Loaded methodology '%s'.", methodology.key)
@@ -208,6 +210,28 @@ class JsonMethodologyRepository:
             ),
             depends_on=tuple(payload.get("depends_on", [])),
         )
+
+    def _reject_unknown_capabilities(
+        self,
+        methodology: Methodology,
+        path: Path,
+    ) -> None:
+        """
+        An unknown capability key used to pass validation and raise a bare
+        KeyError halfway through planning, breaking the guarantee that an
+        authoring error surfaces once, at load, by name.
+        """
+        valid = set(CapabilityCatalog.keys())
+
+        for activity in methodology.activities:
+            unknown = sorted(set(activity.capabilities) - valid)
+
+            if unknown:
+                raise MethodologyError(
+                    f"{path.name}: activity '{activity.key}' requires unknown "
+                    f"capabilities {', '.join(unknown)}. "
+                    f"Available: {', '.join(sorted(valid))}."
+                )
 
     def _reject_unknown_techniques(
         self,

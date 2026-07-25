@@ -15,7 +15,6 @@ from infrastructure.artifacts.file_artifact_store import InMemoryArtifactStore
 from infrastructure.persistence.project_repository import ProjectRepository
 from infrastructure.persistence.project_serializer import ProjectSerializer
 from tests.fixtures import (
-    SINGLE_STAGE,
     FakeMethodologies,
     ScriptedLLM,
     build_consultant,
@@ -153,29 +152,27 @@ def test_rejects_an_unsupported_schema_version():
         ProjectSerializer().from_dict({"schema_version": 99})
 
 
-def test_the_methodology_is_restored_with_the_plan(tmp_path):
+def test_the_plan_and_its_gates_survive_a_round_trip(tmp_path):
     """
     Without this the gates vanish on reload and a resumed engagement would
     happily run work its quality gate should have blocked.
     """
-    from infrastructure.persistence.project_serializer import ProjectSerializer
-
-    methodologies = FakeMethodologies()
-    repository = ProjectRepository(
-        tmp_path / "state",
-        serializer=ProjectSerializer(methodologies=methodologies),
-    )
+    repository = ProjectRepository(tmp_path / "state")
 
     project = ProjectBuilder.build(
         ScriptedLLM(),
         InMemoryArtifactStore(),
         repository=repository,
-        methodologies=methodologies,
+        methodologies=FakeMethodologies(),
     ).start(build_mission(), resources=[build_consultant()])
 
     restored = repository.load(project.id)
 
-    assert restored.execution_plan.methodology.key == "test-two-stage"
+    assert restored.execution_plan.methodology_key == "test-two-stage"
+    assert [s.key for s in restored.execution_plan.stages] == [
+        "discovery",
+        "design",
+    ]
     assert restored.deliverable("requirements").stage == "discovery"
     assert restored.deliverable("requirements").sections == (
         "Learning needs",
@@ -184,29 +181,49 @@ def test_the_methodology_is_restored_with_the_plan(tmp_path):
     assert not restored.execution_plan.gate_result("discovery").passed
 
 
-def test_an_unknown_methodology_does_not_break_a_reload(tmp_path):
-    """A methodology may be renamed; the saved plan still holds the work."""
-    from infrastructure.persistence.project_serializer import ProjectSerializer
-
-    methodologies = FakeMethodologies()
-    repository = ProjectRepository(
-        tmp_path / "state",
-        serializer=ProjectSerializer(methodologies=methodologies),
-    )
+def test_gates_survive_the_methodology_being_deleted(tmp_path):
+    """
+    Regression: gates used to be resolved from the registry at read time, so
+    renaming or removing a methodology silently opened every gate on every
+    engagement already in flight. The plan now owns the gates it was planned
+    with, and governance cannot be edited out from under a running engagement.
+    """
+    repository = ProjectRepository(tmp_path / "state")
 
     project = ProjectBuilder.build(
         ScriptedLLM(),
         InMemoryArtifactStore(),
         repository=repository,
-        methodologies=methodologies,
+        methodologies=FakeMethodologies(),
     ).start(build_mission(), resources=[build_consultant()])
 
-    empty = ProjectRepository(
-        tmp_path / "state",
-        serializer=ProjectSerializer(methodologies=FakeMethodologies([SINGLE_STAGE])),
-    )
+    # The methodology is gone entirely; the repository never consults one.
+    restored = ProjectRepository(tmp_path / "state").load(project.id)
 
-    restored = empty.load(project.id)
+    gate = restored.execution_plan.gate_result("discovery")
 
-    assert restored.execution_plan.methodology is None
+    assert not gate.passed
+    assert "has not been approved" in gate.failures[0]
     assert len(restored.execution_plan.activities) == 2
+
+
+def test_a_plan_referencing_missing_work_fails_loudly(tmp_path):
+    """Silently dropping work would leave a smaller engagement than was saved."""
+    import json
+
+    repository = ProjectRepository(tmp_path / "state")
+
+    project = ProjectBuilder.build(
+        ScriptedLLM(),
+        InMemoryArtifactStore(),
+        repository=repository,
+        methodologies=FakeMethodologies(),
+    ).start(build_mission(), resources=[build_consultant()])
+
+    path = (tmp_path / "state") / f"{project.id}.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["execution_plan"]["activity_order"].append("ghost-activity")
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="ghost-activity"):
+        repository.load(project.id)

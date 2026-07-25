@@ -12,7 +12,6 @@ from core.execution.deliverable_status import DeliverableStatus
 from infrastructure.artifacts.file_artifact_store import InMemoryArtifactStore
 from infrastructure.persistence.mission_repository import MissionRepository
 from infrastructure.persistence.project_repository import ProjectRepository
-from infrastructure.persistence.project_serializer import ProjectSerializer
 from interfaces.web import markdown
 from interfaces.web.server import ReviewApp
 from tests.fixtures import (
@@ -44,12 +43,7 @@ class InlineRunner:
 
 def build(tmp_path):
     methodologies = FakeMethodologies()
-    # Mirrors the CLI: the serializer needs the registry, or a reloaded plan
-    # comes back without its methodology and the gates silently disappear.
-    projects = ProjectRepository(
-        tmp_path / "state",
-        serializer=ProjectSerializer(methodologies=methodologies),
-    )
+    projects = ProjectRepository(tmp_path / "state")
     missions = MissionRepository(tmp_path / "state" / "missions")
     service = ProjectBuilder.build(
         ScriptedLLM(),
@@ -324,7 +318,7 @@ def test_the_engagement_page_names_the_methodology(tmp_path):
 
     _, body = app.get(f"/engagement/{project.id}", {})
 
-    assert "Two Stage Test Methodology" in body
+    assert "test-two-stage" in body
 
 
 def test_stages_are_shown_with_their_gate_status(tmp_path):
