@@ -382,6 +382,62 @@ def command_run(args, settings: Settings) -> int:
     return 0
 
 
+AGENT_SYSTEM = (
+    "You are Hyperium, an autonomous assistant that completes tasks on the "
+    "user's behalf. You have tools to read files, list directories and fetch "
+    "URLs. Use them to gather facts before answering — never guess at a file's "
+    "contents or a page's text. When you have enough information, give a clear, "
+    "complete answer. Do not describe what you would do; do it, then report "
+    "the result."
+)
+
+
+def command_do(args, settings: Settings) -> int:
+    """
+    Hand the agent a task; it uses read-only tools and reports the result.
+
+    This is the direct-task path: no mission, methodology or approval gate.
+    The tools available today are read-only, so the run is safe to execute
+    unattended.
+    """
+    from application.agent.agent_runner import AgentRunner
+    from core.agents.agent_result import StopReason
+    from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
+    from infrastructure.tools import read_only_tools
+
+    root = Path(args.root).resolve()
+
+    runner = AgentRunner(
+        OllamaAgentProvider(
+            model=settings.model,
+            timeout_seconds=settings.llm_timeout_seconds,
+            temperature=settings.temperature,
+        ),
+        read_only_tools(root),
+        max_iterations=args.max_steps,
+    )
+
+    result = runner.run(args.task, system=AGENT_SYSTEM)
+
+    if args.verbose and result.steps:
+        print("Steps:")
+        for step in result.steps:
+            preview = step.result.replace("\n", " ")[:100]
+            print(f"  - {step.tool}({step.arguments}) -> {preview}")
+        print()
+
+    print(result.output)
+
+    if result.stop_reason is StopReason.MAX_ITERATIONS:
+        print(
+            "\n(Stopped: reached the step limit. Raise it with --max-steps.)",
+            file=sys.stderr,
+        )
+        return 1
+
+    return 0
+
+
 def command_resume(args, settings: Settings) -> int:
     service, repository = build_context(settings)
 
@@ -595,6 +651,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="A success criterion. May be repeated.",
     )
 
+    do = sub.add_parser(
+        "do",
+        help="Give the agent a task; it uses tools and reports the result.",
+    )
+    do.add_argument("task", help="The task, in plain language.")
+    do.add_argument(
+        "--root",
+        default=".",
+        help="Directory the file tools are confined to (default: current).",
+    )
+    do.add_argument(
+        "--max-steps",
+        type=int,
+        default=12,
+        dest="max_steps",
+        help="Maximum tool-using steps before the run is cut short.",
+    )
+    do.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show each tool call before the answer.",
+    )
+
     resume = sub.add_parser("resume", help="Continue after an approval.")
     resume.add_argument("project_id")
 
@@ -673,6 +752,7 @@ def main(argv: list[str] | None = None) -> int:
         "mission": lambda: mission_handlers[args.mission_command](args, settings),
         "launch": lambda: command_launch(args, settings),
         "run": lambda: command_run(args, settings),
+        "do": lambda: command_do(args, settings),
         "resume": lambda: command_resume(args, settings),
         "submit": lambda: command_submit(args, settings),
         "serve": lambda: command_serve(args, settings),
