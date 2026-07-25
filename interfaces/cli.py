@@ -420,22 +420,16 @@ def agent_tools(args, stack):
     return tools
 
 
-def command_do(args, settings: Settings) -> int:
-    """
-    Hand the agent a task; it uses tools and reports the result.
-
-    The direct-task path: no mission or methodology. Read-only file tools by
-    default. --allow-writes adds filesystem writes; --mcp connects external
-    tools (email, files, ...) from an MCP config. Every acting tool is held at
-    the approval gate — asked interactively, or auto-approved for a trusted
-    unattended run.
-    """
+def run_agent_task(args, settings: Settings, prompt: str) -> int:
+    """Assemble tools, run the agent on `prompt`, record the run, report it."""
     from contextlib import ExitStack
 
     from application.agent.agent_runner import AgentRunner
     from application.agent.approval_policies import AutoApproveApprover
+    from application.agent.task_service import TaskService
     from core.agents.agent_result import StopReason
     from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
+    from infrastructure.persistence.task_repository import TaskRepository
     from interfaces.approval import ConsoleApprover
 
     approver = AutoApproveApprover() if args.auto_approve else ConsoleApprover()
@@ -453,7 +447,12 @@ def command_do(args, settings: Settings) -> int:
         )
 
         # Runs inside the stack: MCP servers must stay alive for the whole run.
-        result = runner.run(args.task, system=AGENT_SYSTEM)
+        result = runner.run(prompt, system=AGENT_SYSTEM)
+
+    record = None
+    if not args.no_save:
+        service = TaskService(TaskRepository(settings.state_directory / "tasks"))
+        record = service.record(prompt=prompt, result=result, model=settings.model)
 
     if args.verbose and result.steps:
         print("Steps:")
@@ -464,6 +463,9 @@ def command_do(args, settings: Settings) -> int:
 
     print(result.output)
 
+    if record is not None:
+        print(f"\nSaved as task {record.id}", file=sys.stderr)
+
     if result.stop_reason is StopReason.MAX_ITERATIONS:
         print(
             "\n(Stopped: reached the step limit. Raise it with --max-steps.)",
@@ -472,6 +474,74 @@ def command_do(args, settings: Settings) -> int:
         return 1
 
     return 0
+
+
+def command_do(args, settings: Settings) -> int:
+    """
+    Hand the agent a task; it uses tools and reports the result.
+
+    The direct-task path: no mission or methodology. Read-only file tools by
+    default. --allow-writes adds filesystem writes; --mcp connects external
+    tools (email, files, ...) from an MCP config. Every acting tool is held at
+    the approval gate — asked interactively, or auto-approved for a trusted
+    unattended run. Each run is recorded unless --no-save is given.
+    """
+    return run_agent_task(args, settings, args.task)
+
+
+def command_task_list(args, settings: Settings) -> int:
+    from infrastructure.persistence.task_repository import TaskRepository
+
+    records = TaskRepository(settings.state_directory / "tasks").list()
+
+    if not records:
+        print('No saved tasks yet. Run one with: hyperium do "..."')
+        return 0
+
+    print(f"{'ID':<38} {'WHEN':<17} {'STATUS':<15} PROMPT")
+    for record in records:
+        when = record.created_at.strftime("%Y-%m-%d %H:%M")
+        prompt = record.prompt.replace("\n", " ")[:48]
+        print(f"{str(record.id):<38} {when:<17} {record.status:<15} {prompt}")
+
+    return 0
+
+
+def command_task_show(args, settings: Settings) -> int:
+    from infrastructure.persistence.task_repository import TaskRepository
+
+    record = TaskRepository(settings.state_directory / "tasks").get(
+        UUID(args.task_id)
+    )
+
+    print(f"Task {record.id}")
+    print(f"  when:   {record.created_at.isoformat()}")
+    print(f"  model:  {record.model}")
+    print(f"  status: {record.status}")
+    print(f"\nPrompt:\n  {record.prompt}")
+
+    if record.result:
+        if record.result.steps:
+            print("\nSteps:")
+            for step in record.result.steps:
+                preview = step.result.replace("\n", " ")[:100]
+                print(f"  - {step.tool}({step.arguments}) -> {preview}")
+
+        print(f"\nResult:\n{record.result.output}")
+
+    return 0
+
+
+def command_task_rerun(args, settings: Settings) -> int:
+    from infrastructure.persistence.task_repository import TaskRepository
+
+    record = TaskRepository(settings.state_directory / "tasks").get(
+        UUID(args.task_id)
+    )
+
+    print(f"Re-running task {record.id}.", file=sys.stderr)
+
+    return run_agent_task(args, settings, record.prompt)
 
 
 def command_tools(args, settings: Settings) -> int:
@@ -613,6 +683,50 @@ def command_show(args, settings: Settings) -> int:
     return 0
 
 
+def _add_agent_run_args(parser: argparse.ArgumentParser) -> None:
+    """The execution flags shared by `do` and `task rerun`."""
+    parser.add_argument(
+        "--root",
+        default=".",
+        help="Directory the file tools are confined to (default: current).",
+    )
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=12,
+        dest="max_steps",
+        help="Maximum tool-using steps before the run is cut short.",
+    )
+    parser.add_argument(
+        "--allow-writes",
+        action="store_true",
+        dest="allow_writes",
+        help="Let the agent change files. Each write is held for approval.",
+    )
+    parser.add_argument(
+        "--auto-approve",
+        action="store_true",
+        dest="auto_approve",
+        help="Approve every action without asking. Unattended runs only.",
+    )
+    parser.add_argument(
+        "--mcp",
+        default=None,
+        help="Path to an MCP config; connects its servers' tools to the agent.",
+    )
+    parser.add_argument(
+        "--no-save",
+        action="store_true",
+        dest="no_save",
+        help="Do not record this run in the task log.",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show each tool call before the answer.",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="hyperium",
@@ -708,40 +822,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Give the agent a task; it uses tools and reports the result.",
     )
     do.add_argument("task", help="The task, in plain language.")
-    do.add_argument(
-        "--root",
-        default=".",
-        help="Directory the file tools are confined to (default: current).",
-    )
-    do.add_argument(
-        "--max-steps",
-        type=int,
-        default=12,
-        dest="max_steps",
-        help="Maximum tool-using steps before the run is cut short.",
-    )
-    do.add_argument(
-        "--allow-writes",
-        action="store_true",
-        dest="allow_writes",
-        help="Let the agent change files. Each write is held for approval.",
-    )
-    do.add_argument(
-        "--auto-approve",
-        action="store_true",
-        dest="auto_approve",
-        help="Approve every action without asking. Unattended runs only.",
-    )
-    do.add_argument(
-        "--mcp",
-        default=None,
-        help="Path to an MCP config; connects its servers' tools to the agent.",
-    )
-    do.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Show each tool call before the answer.",
-    )
+    _add_agent_run_args(do)
 
     tools = sub.add_parser(
         "tools",
@@ -750,6 +831,15 @@ def build_parser() -> argparse.ArgumentParser:
     tools.add_argument("--root", default=".")
     tools.add_argument("--allow-writes", action="store_true", dest="allow_writes")
     tools.add_argument("--mcp", default=None, help="Path to an MCP config.")
+
+    task = sub.add_parser("task", help="Inspect and re-run saved agent tasks.")
+    task_sub = task.add_subparsers(dest="task_command", required=True)
+    task_sub.add_parser("list", help="List saved tasks, newest first.")
+    task_show = task_sub.add_parser("show", help="Show one saved task in full.")
+    task_show.add_argument("task_id")
+    task_rerun = task_sub.add_parser("rerun", help="Run a saved task's prompt again.")
+    task_rerun.add_argument("task_id")
+    _add_agent_run_args(task_rerun)
 
     resume = sub.add_parser("resume", help="Continue after an approval.")
     resume.add_argument("project_id")
@@ -822,6 +912,12 @@ def main(argv: list[str] | None = None) -> int:
         "techniques": command_methodology_techniques,
     }
 
+    task_handlers = {
+        "list": command_task_list,
+        "show": command_task_show,
+        "rerun": command_task_rerun,
+    }
+
     handlers = {
         "methodology": lambda: methodology_handlers[args.methodology_command](
             args, settings
@@ -831,6 +927,7 @@ def main(argv: list[str] | None = None) -> int:
         "run": lambda: command_run(args, settings),
         "do": lambda: command_do(args, settings),
         "tools": lambda: command_tools(args, settings),
+        "task": lambda: task_handlers[args.task_command](args, settings),
         "resume": lambda: command_resume(args, settings),
         "submit": lambda: command_submit(args, settings),
         "serve": lambda: command_serve(args, settings),
