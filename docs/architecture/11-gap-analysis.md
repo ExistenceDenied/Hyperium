@@ -1,6 +1,6 @@
 # Gap Analysis
 
-> Version: 4.0
+> Version: 5.0
 > Method: read against the repository, not against memory. Every claim below was
 > verified by inspecting the source tree and running the code. Counts are stated
 > as measured.
@@ -42,6 +42,16 @@ requires.
 first edition — is delivered.** What remains is **Knowledge**: nothing survives
 a project.
 
+**Since v4.0, activities are executed by tool-using agents.** An agent runs on
+Ollama's native tool calling; it can read files, fetch URLs and reach any
+external system exposed over MCP, and anything that would change the world is
+held at an approval gate. The same agent powers a lightweight direct-task path
+(`hyperium do`) and the methodology engine, so a whole engagement is now
+carried out by agents rather than one-shot completions — without moving the
+plan, its ordering or its gates. The four `isinstance(AIResource)` leaks this
+document flagged are closed. This does not touch the Knowledge gap: an agent's
+tools reach outward, but nothing it learns is retained across projects.
+
 ---
 
 # Status Summary
@@ -61,7 +71,12 @@ a project.
 | Configuration | 🟢 Working | `config/settings.py` with `HYPERIUM_*` environment overrides for model, temperature, workspace, state dir, retries, logging. |
 | Retry | 🟢 Working | `ResilientProvider` — bounded retries, exponential backoff, empty-response detection. **Now wired** in the CLI composition root. |
 | Observability | 🟡 Partial | Module loggers throughout; file + stream handlers. No correlation of events to mission/activity id, no approval audit trail. |
-| Execution | 🟡 Partial | Sequential only — the graph expresses safe parallelism, the engine does not use it. |
+| Execution | 🟡 Partial | Activities run as tool-using agents through a pluggable `ActivityExecutor`; still sequential — the graph expresses safe parallelism the engine does not yet use. |
+| Direct-task agent | 🟢 Working | `hyperium do` runs an agent loop (`AgentRunner`) on Ollama tool calling, with read-only file/web tools by default and a hard step cap. |
+| Acting under approval | 🟢 Working | Side-effecting tools declare `requires_approval`; an `Approver` gates each action. Deny-by-default; console or auto-approve at the CLI. |
+| External tools (MCP) | 🟢 Working | A stdlib MCP stdio client exposes any MCP server's tools to the agent; `readOnlyHint` decides gating. |
+| Task log | 🟢 Working | Every direct-task run is persisted (schema-versioned), listable and re-runnable; held to the reflection completeness standard. |
+| Open/closed for resources | 🟢 Working | `Resource.executes_autonomously` replaced four `isinstance(AIResource)` checks; a new autonomous resource type needs no engine edit. |
 | Timeouts | 🟢 Working | `OllamaProvider(timeout_seconds=…)`, configurable via `HYPERIUM_LLM_TIMEOUT`. |
 | LLM providers | 🟡 Partial | Ollama only. The abstraction has never been exercised against a second provider. |
 | Methodology | 🟢 Working | `core/methodologies/`; 3 methodologies + 14 techniques authored as JSON, validated on load. |
@@ -181,8 +196,11 @@ engagement than before it.
 
 ## Execution is sequential
 
-`ExecutionEngine` runs an activity only when its resource is an `AIResource`;
-everything else waits for a human to submit work. That part is now complete.
+`ExecutionEngine` runs an activity when its resource
+`executes_autonomously`; everything else waits for work to be submitted from
+outside. Content is produced through an `ActivityExecutor` — the agentic one by
+default at the CLI, so activities can gather real information with tools before
+writing. That part is now complete.
 
 What remains is concurrency: `ready_activities()` returns every runnable
 activity, and the engine iterates them serially. Independent branches of the
@@ -221,8 +239,9 @@ under. The stages are left empty and the loss is logged.
    who approved what — a professional-services platform needs this.
 4. **Add a capacity model to the allocator**, which is the precondition for
    parallel execution rather than a separate feature.
-5. **Close the open/closed leaks**: `isinstance(resource, AIResource)` at four
-   sites, and the hardcoded capability catalogue.
+5. **Close the remaining open/closed leak**: the `isinstance(resource,
+   AIResource)` checks are gone, replaced by `Resource.executes_autonomously`.
+   The hardcoded capability catalogue is what is left.
 6. **Start `core/knowledge/`** only after the above. It is 3.0 work, and
    pretending otherwise is how the first edition of this document scored
    Runtime as "Mostly Complete".

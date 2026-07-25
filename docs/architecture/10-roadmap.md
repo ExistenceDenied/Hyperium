@@ -129,8 +129,9 @@ implicit:
   of approvals → **4.0**.
 - The allocator has **no capacity model** — one resource can be assigned every
   activity → **4.0**.
-- `isinstance(resource, AIResource)` at four sites decides who may execute; a
-  new resource type requires editing the engine → **4.0**.
+- ~~`isinstance(resource, AIResource)` at four sites decides who may execute~~
+  → **closed**: `Resource.executes_autonomously` replaced the type checks, so a
+  new autonomous resource type needs no engine edit.
 - The capability catalogue is hardcoded Python, so a methodology needing a
   ninth capability still requires a code change → **2.0**.
 
@@ -261,6 +262,40 @@ structural replaces substring matching.
 
 ---
 
+# Agentic execution — delivered
+
+**Status: ✅ Delivered — the agent that does the work**
+
+Until now the model produced deliverable content in a single completion: it
+could think and write, but it could not act. This capability turns an activity
+into a tool-using agent — it can read the real files, fetch the sources it is
+pointed to, and reach any system exposed over MCP, then write. Anything that
+changes the world is held at an approval gate. It runs entirely on Ollama's
+native tool calling; no cloud provider is involved.
+
+| Feature | Status | Where it lives |
+|---|---|---|
+| Tool-using agent loop, hard step cap | ✅ | `application/agent/agent_runner.py` |
+| Tool port; read-only file and web tools, path-confined | ✅ | `core/tools/`, `infrastructure/tools/` |
+| Ollama native tool calling | ✅ | `infrastructure/llm/ollama_agent_provider.py` |
+| Acting tools behind a human approval gate | ✅ | `core/interfaces/approver.py`, `WriteFileTool` |
+| External tools over MCP, gated by `readOnlyHint` | ✅ | `infrastructure/mcp/` |
+| Lightweight direct-task path, no methodology | ✅ | `hyperium do "..."` |
+| Every run persisted, listable, re-runnable | ✅ | `infrastructure/persistence/task_repository.py` |
+| Methodology activities executed by the agent | ✅ | `application/execution/agent_activity_executor.py` |
+
+The direct-task path is the counterpart to the methodology path, not a
+replacement: a mission still runs through its methodology, deterministically
+planned and gated. What changed is that both are now carried out by the same
+agent, so a whole engagement can ground its deliverables in real information.
+
+**Still open, and deliberately so.** Side-effecting tools in an *unattended*
+engagement stay denied — the engagement path runs read-only. Concurrency,
+richer notification of results, and a browser surface for the task path are not
+built. Provider breadth is unchanged: Ollama only.
+
+---
+
 # Hyperium 3.0 — Organizational memory
 
 **Status: ⬜ Not started. No `core/knowledge/` exists.**
@@ -328,6 +363,7 @@ management.
 | **1.0** | Execute one mission end to end | ✅ **28 / 28** |
 | **1.5** | A usable human loop | ✅ **10 / 10** |
 | **2.0** | Methodologies as first-class objects | 🟡 **6 / 8 (75%)** |
+| **Agentic** | Agents that act, with tools, MCP and approval | ✅ **8 / 8** |
 | **3.0** | Organizational memory | 0 / 6 |
 | **4.0** | Enterprise-scale delivery | 0 / 9 |
 | **5.0** | Digital Consulting Organization | 0 / 5 |
