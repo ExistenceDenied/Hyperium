@@ -1,6 +1,6 @@
 # Gap Analysis
 
-> Version: 3.0
+> Version: 4.0
 > Method: read against the repository, not against memory. Every claim below was
 > verified by inspecting the source tree and running the code. Counts are stated
 > as measured.
@@ -13,8 +13,9 @@ This document compares the current implementation with the target architecture
 defined by [ADR-001](ADR-001-mission-driven-architecture.md),
 [ADR-002](ADR-002-bounded-contexts.md),
 [ADR-003](ADR-003-capability-based-execution.md),
-[ADR-004](ADR-004-execution-model.md) and
-[ADR-005](ADR-005-methodology-driven-planning.md).
+[ADR-004](ADR-004-execution-model.md),
+[ADR-005](ADR-005-methodology-driven-planning.md) and
+[ADR-006](ADR-006-plan-owns-its-governance.md).
 
 It is deliberately unflattering. A gap analysis that reports comfort is useless.
 
@@ -68,7 +69,10 @@ a project.
 | Stages and quality gates | 🟢 Working | Declarative, checkable gates; a stage cannot open until the previous one passes. |
 | Document formats | 🔴 Missing | Markdown only. Word / PowerPoint / BPMN each need a dependency. |
 | Knowledge context | 🔴 Missing | No `core/knowledge/`. Nothing survives a project. The largest unstarted area. |
-| Extensibility | 🔴 Missing | No plugin, methodology or technique registry. The seams named in [09-extensibility.md](09-extensibility.md) are not implemented. |
+| Extensibility | 🟡 Partial | Methodologies and techniques are authored data and load without a code change. No plugin registry; the capability catalogue is still hardcoded. |
+| Architecture enforcement | 🟢 Working | `tests/test_architecture.py` — layering, provider isolation, governance isolation, package cycles, registry agreement. |
+| Schema migrations | 🟢 Working | `infrastructure/persistence/migrations.py`; a version 1 engagement opens today. A test fails the build on a bump with no migration. |
+| Serializer completeness | 🟢 Working | Reflection over each dataclass fails until a new field is persisted. |
 
 Legend: 🟢 Working · 🟡 Partial · 🔴 Missing
 
@@ -192,15 +196,16 @@ A consequence of ADR-004, and deliberate. It also means a fully autonomous run
 is impossible without an auto-approving reviewer. Low-stakes engagements may
 need an opt-out.
 
-## Persistence has no migration path
+## Persistence — migrations now exist
 
-`SCHEMA_VERSION` is enforced strictly: a project saved under an older schema
-fails to load rather than being silently misread. This is the correct default,
-and it has already bitten once — engagements written before the mission backlog
-landed cannot be opened.
+Closed by [ADR-006](ADR-006-plan-owns-its-governance.md) §7. A saved
+engagement is upgraded one version at a time; a version 1 file opens today.
 
-There is no upgrade step. While the schema is still moving this is acceptable;
-before anyone stores work they care about, it is not.
+**One honest limitation.** A version 3 engagement resumes *without stage
+gates*. That version stored only the methodology key and resolved gates from
+the registry, so they cannot be recovered from the file — and rebuilding them
+from today's registry would hold an engagement to rules it was never planned
+under. The stages are left empty and the loss is logged.
 
 ---
 
@@ -216,7 +221,8 @@ before anyone stores work they care about, it is not.
    who approved what — a professional-services platform needs this.
 4. **Add a capacity model to the allocator**, which is the precondition for
    parallel execution rather than a separate feature.
-5. **Add a schema migration step** before anyone stores work they care about.
+5. **Close the open/closed leaks**: `isinstance(resource, AIResource)` at four
+   sites, and the hardcoded capability catalogue.
 6. **Start `core/knowledge/`** only after the above. It is 3.0 work, and
    pretending otherwise is how the first edition of this document scored
    Runtime as "Mostly Complete".

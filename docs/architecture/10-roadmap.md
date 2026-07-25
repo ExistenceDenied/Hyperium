@@ -25,7 +25,7 @@ the product and is covered by a test — not when a class for it exists.
 
 # Where we are
 
-**1.0 complete (25 / 25). 1.5 complete (10 / 10). 2.0 is 75% delivered (6 / 8).**
+**1.0 complete (28 / 28). 1.5 complete (10 / 10). 2.0 is 75% delivered (6 / 8).**
 
 An engagement runs end to end: a mission is captured in a backlog, analysed
 into a dependency-ordered plan, executed by capability-matched resources,
@@ -55,7 +55,7 @@ business concept, a **Project** is the execution vehicle created from it, an
 
 # Hyperium 1.0 — Execute one mission end to end
 
-**Status: ✅ Delivered — 25 / 25 features**
+**Status: ✅ Delivered — 28 / 28 features**
 
 ## Mission management
 
@@ -97,10 +97,13 @@ business concept, a **Project** is the execution vehicle created from it, an
 | Workspace as the store of produced artifacts | ✅ | `ArtifactStore` / `FileArtifactStore` |
 | Command line interface for the full lifecycle | ✅ | `interfaces/cli.py` |
 | Configuration through `HYPERIUM_*` environment variables | ✅ | `config/settings.py` |
-| Structured logging to file and stream | ✅ | `infrastructure/observability/` |
+| Logging to file and stream | ✅ | `infrastructure/observability/` — plain text; correlation by mission/activity is 4.0 |
 | Retry with exponential backoff on provider failure | ✅ | `infrastructure/llm/resilient_provider.py` |
 | Call timeouts | ✅ | `OllamaProvider(timeout_seconds=…)`, `HYPERIUM_LLM_TIMEOUT` |
 | Retirement of the legacy agent/runtime stack | ✅ | Deleted under [ADR-004](ADR-004-execution-model.md) |
+| Schema migrations — an older engagement still opens | ✅ | `infrastructure/persistence/migrations.py` |
+| Architecture invariants enforced by tests | ✅ | `tests/test_architecture.py` |
+| CI: lint, tests, methodology validation | ✅ | `.github/workflows/ci.yml` |
 
 ## Success criteria
 
@@ -126,6 +129,10 @@ implicit:
   of approvals → **4.0**.
 - The allocator has **no capacity model** — one resource can be assigned every
   activity → **4.0**.
+- `isinstance(resource, AIResource)` at four sites decides who may execute; a
+  new resource type requires editing the engine → **4.0**.
+- The capability catalogue is hardcoded Python, so a methodology needing a
+  ninth capability still requires a code change → **2.0**.
 
 ---
 
@@ -304,7 +311,7 @@ management.
 
 | Version | Theme | Delivered |
 |---|---|---|
-| **1.0** | Execute one mission end to end | ✅ **25 / 25** |
+| **1.0** | Execute one mission end to end | ✅ **28 / 28** |
 | **1.5** | A usable human loop | ✅ **10 / 10** |
 | **2.0** | Methodologies as first-class objects | 🟡 **6 / 8 (75%)** |
 | **3.0** | Organizational memory | 0 / 6 |

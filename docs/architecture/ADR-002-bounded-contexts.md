@@ -16,6 +16,28 @@ Dependencies between contexts should be minimized.
 
 ---
 
+> ## AMENDED
+>
+> Amended by [ADR-006](ADR-006-plan-owns-its-governance.md) §8.
+>
+> **Methodologies is its own bounded context** (`core/methodologies/`), not
+> part of Knowledge. It owns Methodology, Stage, DeliverableTemplate,
+> ActivityTemplate, Technique and QualityGate — authored data, immutable at
+> runtime, depended on by Planning.
+>
+> Knowledge retains lessons learned, patterns and reusable examples: the
+> things extracted *from* an engagement, rather than the methodology that
+> directs one. This document conflated the two.
+>
+> Also stale in this document: **`LLMService` no longer exists** (deleted with
+> `services/` under [ADR-004](ADR-004-execution-model.md); the port is
+> `core/interfaces/llm_provider.LLMProvider`), and **"Work Items"** is retired
+> vocabulary — the unit of work is an **Activity**.
+>
+> The context boundaries and the dependency rule are otherwise unchanged, and
+> `tests/test_architecture.py` now enforces them.
+
+
 # Bounded Contexts
 
 ## Missions

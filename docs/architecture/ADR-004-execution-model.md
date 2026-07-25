@@ -1,7 +1,9 @@
 # ADR-004: Execution Model
 
 > Version: 1.0
-> Status: **Accepted**
+> Status: **Accepted**, amended by
+> [ADR-006](ADR-006-plan-owns-its-governance.md) (persistence and the review
+> boundary).
 > Supersedes the agent-binding parts of `02-domain-model.md`, `05-agents.md` and `06-runtime.md`.
 
 ---
@@ -122,8 +124,10 @@ honest, rather than `COMPLETED`, which would not be.
 - Every deliverable requires an explicit approval, so a fully autonomous run
   is no longer possible without an auto-approving reviewer. This is
   deliberate; it may need an opt-out for low-stakes engagements.
-- Serialisation must track the domain model. `SCHEMA_VERSION` guards this and
-  a mismatch fails loudly rather than restoring a corrupt graph.
+- Serialisation must track the domain model. `SCHEMA_VERSION` guards this;
+  since [ADR-006](ADR-006-plan-owns-its-governance.md) an older file is
+  migrated rather than refused, and a reflection test fails the build when a
+  new domain field is not persisted.
 - Activities still execute sequentially. The dependency graph makes safe
   parallelism expressible, but it is not yet implemented.
 

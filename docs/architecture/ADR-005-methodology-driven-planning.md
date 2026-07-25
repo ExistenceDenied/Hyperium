@@ -3,7 +3,10 @@
 > Version: 1.0
 > Status: **Accepted**
 > Builds on [ADR-004](ADR-004-execution-model.md). Resolves the open question
-> it recorded.
+> it recorded. Amended by
+> [ADR-006](ADR-006-plan-owns-its-governance.md): the plan, not the registry,
+> owns the gates it was planned with, and the analysis no longer carries the
+> work breakdown.
 
 ---
 
@@ -121,6 +124,11 @@ is no stage to govern the boundary.
 ---
 
 # Consequences
+
+**Amended by [ADR-006](ADR-006-plan-owns-its-governance.md).** As first
+implemented, the methodology's output was written back into `AnalysisResult`
+and the gates were resolved from the registry at read time. Both are fixed;
+decision 1 and decision 6 are otherwise unchanged.
 
 **Positive**
 

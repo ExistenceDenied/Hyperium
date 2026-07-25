@@ -22,6 +22,7 @@ from core.project.project import Project
 from core.resources.ai_resource import AIResource
 from core.resources.human_resource import HumanResource
 from core.resources.resource import Resource
+from infrastructure.persistence.migrations import upgrade
 from infrastructure.persistence.mission_serializer import MissionSerializer
 
 # 2: the embedded mission gained backlog identity and lifecycle.
@@ -61,13 +62,9 @@ class ProjectSerializer:
         }
 
     def from_dict(self, payload: dict[str, Any]) -> Project:
-        version = payload.get("schema_version")
-
-        if version != SCHEMA_VERSION:
-            raise ValueError(
-                f"Unsupported project schema version {version!r}; "
-                f"expected {SCHEMA_VERSION}."
-            )
+        # Older files are upgraded rather than refused. A schema bump should
+        # not cost anyone their engagement.
+        payload = upgrade(payload, SCHEMA_VERSION)
 
         return Project(
             id=UUID(payload["id"]),

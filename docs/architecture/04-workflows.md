@@ -1,6 +1,29 @@
 # Hyperium Workflows
 
 > Version: 1.0
+> Status: **SUPERSEDED**
+
+---
+
+> ## ⚠ SUPERSEDED NOTICE
+>
+> **There is no `Workflow` type in Hyperium, and there is no `Work Item`.**
+> This document describes a layer between Methodology and Stage that was never
+> built and is not planned. Do not design against it.
+>
+> Superseded by [ADR-005](ADR-005-methodology-driven-planning.md): a
+> `Methodology` contains `Stage`s directly, a Stage contains
+> `DeliverableTemplate`s, and those contain `ActivityTemplate`s. Stage
+> ordering is expanded into ordinary activity dependencies so that one
+> topological sort enforces it — there is no separate workflow engine.
+>
+> **The ideas in this document survive; the entity does not.** Dependency
+> ordering, parallelism, entry/exit conditions and review loops are all real,
+> and are implemented as described in
+> [ADR-005](ADR-005-methodology-driven-planning.md) and
+> [ADR-006](ADR-006-plan-owns-its-governance.md). Read it for the reasoning,
+> not for the model.
+
 
 ---
 

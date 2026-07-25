@@ -4,6 +4,26 @@
 
 ---
 
+> ## ⚠ PARTIALLY SUPERSEDED
+>
+> **`LLMService` does not exist.** It was deleted with `services/` under
+> [ADR-004](ADR-004-execution-model.md). The port is
+> `core/interfaces/llm_provider.LLMProvider`, with a single `generate` method,
+> and `ResilientProvider` wraps it with retries and a timeout.
+>
+> **Still valid:** the isolation goal, provider abstraction, and the rule that
+> nothing in the domain may import a provider — now enforced by
+> `tests/test_architecture.py::test_the_domain_never_depends_on_an_ai_provider`.
+>
+> **Not built:** streaming, tool calling, model selection, and structured
+> output at the provider level. Response validation happens in the domain
+> (`AnalysisResultParser`), not in this layer as described below.
+>
+> **Superseded vocabulary:** "Agents" — prompts live in
+> `core/execution/prompting/`, bound to capabilities rather than agent classes
+> ([ADR-003](ADR-003-capability-based-execution.md)).
+
+
 # Purpose
 
 The LLM Layer abstracts all interaction with Large Language Models.

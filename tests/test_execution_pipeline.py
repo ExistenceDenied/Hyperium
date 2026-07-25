@@ -318,3 +318,22 @@ def test_human_allocated_work_is_reported_rather_than_faked():
         "awaits work outside Hyperium" in message
         for message in project.execution_result.messages
     )
+
+
+def test_a_revision_warns_that_downstream_work_is_now_stale():
+    """
+    Restored: this test existed at 1.5 and was lost in the 2.0 rewrite, while
+    the roadmap went on claiming the feature was covered.
+    """
+    project, llm, store = start()
+
+    project.approve("requirements")
+    build_service(llm, store).resume(project)
+
+    project.request_changes("requirements", summary="Missed a stakeholder.")
+    result = build_service(llm, store).resume(project).execution_result
+
+    assert any(
+        "was built on the superseded version" in message
+        for message in result.messages
+    )
