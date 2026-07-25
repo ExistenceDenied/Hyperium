@@ -23,7 +23,7 @@ from uuid import UUID
 from core.missions.mission import MissionStateError
 from core.missions.mission_priority import MissionPriority
 from core.project.project import UnknownDeliverableError
-from interfaces.web import backlog_pages, methodology_pages, pages
+from interfaces.web import backlog_pages, methodology_pages, pages, task_pages
 from interfaces.web.layout import error_page
 
 logger = logging.getLogger(__name__)
@@ -108,6 +108,7 @@ class ReviewApp:
         methodologies=None,
         runner=None,
         resources=None,
+        tasks=None,
     ) -> None:
         self._service = service
         self._projects = projects
@@ -115,6 +116,7 @@ class ReviewApp:
         self._methodologies = methodologies
         self._runner = runner or BackgroundWork()
         self._resources = resources or (lambda: [])
+        self._tasks = tasks
 
         self._get_routes = [
             (re.compile(r"^/$"), self._engagements),
@@ -133,6 +135,12 @@ class ReviewApp:
             (
                 re.compile(r"^/methodologies/(?P<key>[\w-]+)$"),
                 self._methodology,
+            ),
+            (re.compile(r"^/tasks$"), self._tasks_index),
+            (re.compile(r"^/tasks/new$"), self._new_task),
+            (
+                re.compile(r"^/tasks/(?P<key>[0-9a-f-]{36})$"),
+                self._task,
             ),
             (
                 re.compile(r"^/engagement/(?P<key>[0-9a-f-]{36})$"),
@@ -190,6 +198,15 @@ class ReviewApp:
             (
                 re.compile(r"^/engagement/(?P<key>[0-9a-f-]{36})/resume$"),
                 self._resume,
+            ),
+            (re.compile(r"^/tasks$"), self._start_task),
+            (
+                re.compile(r"^/tasks/(?P<key>[0-9a-f-]{36})/approve$"),
+                self._approve_task,
+            ),
+            (
+                re.compile(r"^/tasks/(?P<key>[0-9a-f-]{36})/rerun$"),
+                self._rerun_task,
             ),
             (
                 re.compile(
@@ -327,6 +344,68 @@ class ReviewApp:
         )
 
         return 303, f"/engagement/{project.id}"
+
+    # -------------------------------------------------------------- tasks
+
+    def _require_tasks(self):
+        if self._tasks is None:
+            raise RuntimeError("This interface has no task runner configured.")
+
+        return self._tasks
+
+    def _tasks_index(self, query):
+        return 200, task_pages.tasks_index(self._require_tasks().index())
+
+    def _new_task(self, query):
+        self._require_tasks()
+
+        return 200, task_pages.new_task()
+
+    def _task(self, query, key):
+        view = self._require_tasks().view(UUID(key))
+
+        if view is None:
+            return 404, error_page(f"No task '{key}'.")
+
+        return 200, task_pages.task_detail(view)
+
+    def _start_task(self, form):
+        prompt = form.get("prompt", [""])[0].strip()
+
+        if not prompt:
+            return 400, error_page("A task needs a prompt.", code=400)
+
+        task_id = self._require_tasks().start(
+            prompt, allow_writes="allow_writes" in form
+        )
+
+        return 303, f"/tasks/{task_id}"
+
+    def _approve_task(self, form, key):
+        decision = form.get("decision", [""])[0]
+
+        if decision not in ("approve", "reject"):
+            return 400, error_page("Unknown approval decision.", code=400)
+
+        self._require_tasks().approve(
+            UUID(key),
+            approved=decision == "approve",
+            reason=f"{decision}d via the web UI",
+        )
+
+        return 303, f"/tasks/{key}"
+
+    def _rerun_task(self, form, key):
+        tasks = self._require_tasks()
+        view = tasks.view(UUID(key))
+
+        if view is None:
+            return 404, error_page(f"No task '{key}'.")
+
+        # Re-runs start read-only; granting writes again is a deliberate act.
+        task_id = tasks.start(view.prompt, allow_writes=False)
+
+        return 303, f"/tasks/{task_id}"
 
     # ------------------------------------------------------------ backlog
 

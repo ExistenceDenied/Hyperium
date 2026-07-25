@@ -636,6 +636,36 @@ def command_submit(args, settings: Settings) -> int:
     return 0
 
 
+def build_web_task_runner(settings: Settings):
+    """The browser's task runner: agent runs with web-mediated approval."""
+    from application.agent.agent_runner import AgentRunner
+    from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
+    from infrastructure.persistence.task_repository import TaskRepository
+    from infrastructure.tools import read_only_tools, writable_tools
+    from interfaces.web.task_runner import WebTaskRunner
+
+    def make_runner(approver, allow_writes):
+        provider = OllamaAgentProvider(
+            model=settings.model,
+            timeout_seconds=settings.llm_timeout_seconds,
+            temperature=settings.temperature,
+        )
+        tools = (
+            writable_tools(settings.workspace)
+            if allow_writes
+            else read_only_tools(settings.workspace)
+        )
+
+        return AgentRunner(provider, tools, approver=approver)
+
+    return WebTaskRunner(
+        make_runner,
+        TaskRepository(settings.state_directory / "tasks"),
+        model=settings.model,
+        system=AGENT_SYSTEM,
+    )
+
+
 def command_serve(args, settings: Settings) -> int:
     from interfaces.web.server import ReviewApp, serve
 
@@ -647,6 +677,7 @@ def command_serve(args, settings: Settings) -> int:
         missions=build_backlog(settings),
         methodologies=build_methodologies(settings),
         resources=lambda: [default_resource(settings)],
+        tasks=build_web_task_runner(settings),
     )
 
     httpd = serve(app, host=args.host, port=args.port)
