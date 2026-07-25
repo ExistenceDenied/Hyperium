@@ -9,9 +9,15 @@ choose what to show.
 from __future__ import annotations
 
 from core.execution.deliverable_status import DeliverableStatus
+from core.missions.constraint import ConstraintType
 from core.missions.mission_priority import MissionPriority
 from core.missions.mission_status import MissionStatus
 from interfaces.web.layout import esc, page
+
+_CONSTRAINT_TYPES = ", ".join(
+    f"<code>{item.name.title()}</code>" for item in ConstraintType
+    if item is not ConstraintType.OTHER
+)
 
 _STATUS_CLASS = {
     MissionStatus.DRAFT: "draft",
@@ -434,12 +440,13 @@ def mission_form(
         "<label>Success criteria <span class='hint'>— one per line; at least "
         "one is required before launching</span></label>"
         f"<textarea name='criteria' rows='4'>{esc(criteria)}</textarea>"
-        "<label>Constraints <span class='hint'>— one per line, as "
-        "<code>TYPE: description</code>, e.g. <code>TIME: must ship in Q3</code>"
-        "</span></label>"
+        "<label>Constraints <span class='hint'>— one per line. Start with a "
+        f"category if you like: {_CONSTRAINT_TYPES}. "
+        "Anything else is kept as written.</span></label>"
         f"<textarea name='constraints' rows='3'>{esc(constraints)}</textarea>"
         "<label>Stakeholders <span class='hint'>— one per line, as "
-        "<code>Name: role</code></span></label>"
+        "<code>Name: role</code>, e.g. <code>Priya: Head of Operations</code>"
+        "</span></label>"
         f"<textarea name='stakeholders' rows='3'>{esc(stakeholders)}</textarea>"
         "<div class='actions'>"
         "<button class='primary' type='submit'>"

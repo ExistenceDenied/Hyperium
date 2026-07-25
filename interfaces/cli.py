@@ -159,24 +159,6 @@ def report(project: Project) -> None:
             print(f"  hyperium reject  {project.id} {key} --note '...'")
 
 
-def parse_pairs(values, label: str) -> list[tuple[str, str]]:
-    """
-    Parse `key:value` arguments, e.g. --constraint "TIME:Must ship in Q3".
-    """
-    pairs = []
-
-    for entry in values or []:
-        if ":" not in entry:
-            raise ValueError(
-                f"{label} must be written as 'type:description', got '{entry}'."
-            )
-
-        key, _, value = entry.partition(":")
-        pairs.append((key.strip(), value.strip()))
-
-    return pairs
-
-
 def show_mission(mission, verbose: bool = False) -> None:
     flag = "" if mission.is_complete else "  (incomplete - needs a success criterion)"
 
@@ -283,8 +265,8 @@ def command_mission_add(args, settings: Settings) -> int:
         objective=args.objective,
         priority=MissionPriority.parse(args.priority),
         criteria=args.criterion,
-        constraints=parse_pairs(args.constraint, "--constraint"),
-        stakeholders=parse_pairs(args.stakeholder, "--stakeholder"),
+        constraints=args.constraint,
+        stakeholders=args.stakeholder,
         methodology=args.methodology,
     )
 
@@ -336,7 +318,7 @@ def command_mission_edit(args, settings: Settings) -> int:
         ),
         add_criteria=args.add_criterion,
         clear_criteria=args.clear_criteria,
-        add_constraints=parse_pairs(args.add_constraint, "--add-constraint"),
+        add_constraints=args.add_constraint,
         clear_constraints=args.clear_constraints,
     )
 

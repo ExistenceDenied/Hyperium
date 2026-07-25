@@ -134,12 +134,37 @@ def test_a_bad_form_is_re_rendered_with_what_was_typed(tmp_path):
     """Losing a half-written mission because of one bad line is unforgivable."""
     app, backlog, _ = build(tmp_path)
 
-    status, body = add(app, constraints="no colon here")
+    status, body = add(app, stakeholders="just a name")
 
     assert status == 400
-    assert "must be written as" in body
+    assert "Name: role" in body
     assert "Halve time-to-first-value." in body  # not lost
     assert backlog.list() == []
+
+
+def test_a_constraint_needs_no_category(tmp_path):
+    """
+    Regression: the form demanded a TYPE prefix, never said which types were
+    valid, and rejected the whole edit if you guessed wrong.
+    """
+    app, backlog, _ = build(tmp_path)
+
+    status, _ = add(app, constraints="COST: under budget\nMust be quiet")
+
+    assert status == 303
+    assert [c.description for c in backlog.list()[0].constraints] == [
+        "COST: under budget",
+        "Must be quiet",
+    ]
+
+
+def test_the_form_says_which_categories_exist(tmp_path):
+    app, _, _ = build(tmp_path)
+
+    _, body = app.get("/missions/new", {})
+
+    assert "Time" in body and "Legal" in body
+    assert "kept as written" in body
 
 
 def test_an_empty_title_is_rejected(tmp_path):
@@ -376,7 +401,7 @@ def test_a_malformed_stakeholder_is_rejected_without_losing_the_form(tmp_path):
     status, body = add(app, stakeholders="just a name")
 
     assert status == 400
-    assert "must be written as" in body
+    assert "Name: role" in body
     assert "Halve time-to-first-value." in body
     assert backlog.list() == []
 

@@ -88,8 +88,8 @@ def test_constraints_and_stakeholders_are_recorded(tmp_path):
     mission = backlog.create(
         title="Onboarding",
         objective="Cut time in half.",
-        constraints=[("TIME", "Must ship in Q3")],
-        stakeholders=[("Priya", "Head of CS")],
+        constraints=["TIME: Must ship in Q3"],
+        stakeholders=["Priya: Head of CS"],
     )
 
     assert mission.constraints[0].description == "Must ship in Q3"
@@ -97,15 +97,46 @@ def test_constraints_and_stakeholders_are_recorded(tmp_path):
     assert mission.stakeholders[0].name == "Priya"
 
 
-def test_an_unknown_constraint_type_is_rejected_with_the_valid_set(tmp_path):
+def test_an_unrecognised_category_is_kept_rather_than_rejected(tmp_path):
+    """
+    "COST: under budget" is an ordinary thing to write. Rejecting a whole
+    mission because the category is not in the enum is hostile; categories
+    sort constraints, they do not gatekeep them.
+    """
     backlog, _ = build_backlog(tmp_path)
 
-    with pytest.raises(ValueError, match="Valid types"):
-        backlog.create(
-            title="X",
-            objective="Y",
-            constraints=[("WEATHER", "Must be sunny")],
-        )
+    mission = backlog.create(
+        title="X",
+        objective="Y",
+        constraints=["COST: under budget", "Must be sunny"],
+    )
+
+    assert [c.description for c in mission.constraints] == [
+        "COST: under budget",
+        "Must be sunny",
+    ]
+    assert {c.type.name for c in mission.constraints} == {"OTHER"}
+
+
+def test_a_known_category_is_still_recognised(tmp_path):
+    backlog, _ = build_backlog(tmp_path)
+
+    mission = backlog.create(
+        title="X",
+        objective="Y",
+        constraints=["legal: GDPR applies"],
+    )
+
+    assert mission.constraints[0].type.name == "LEGAL"
+    assert mission.constraints[0].description == "GDPR applies"
+
+
+def test_a_stakeholder_still_needs_a_role(tmp_path):
+    """Both halves carry meaning and neither can be inferred."""
+    backlog, _ = build_backlog(tmp_path)
+
+    with pytest.raises(ValueError, match="Name: role"):
+        backlog.create(title="X", objective="Y", stakeholders=["just a name"])
 
 
 # -------------------------------------------------------------------- read
@@ -119,8 +150,8 @@ def test_a_mission_survives_a_round_trip(tmp_path):
         objective="Cut time in half.",
         priority=MissionPriority.HIGH,
         criteria=["Time halved."],
-        constraints=[("TIME", "Q3")],
-        stakeholders=[("Priya", "Head of CS")],
+        constraints=["TIME: Q3"],
+        stakeholders=["Priya: Head of CS"],
     )
 
     loaded = backlog.get(created.id)

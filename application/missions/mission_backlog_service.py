@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from core.missions.constraint import Constraint, ConstraintType
+from core.missions.constraint import Constraint
 from core.missions.mission import Mission, MissionStateError
 from core.missions.mission_priority import MissionPriority
 from core.missions.mission_status import MissionStatus
@@ -39,8 +39,8 @@ class MissionBacklogService:
         objective: str,
         priority: MissionPriority = MissionPriority.MEDIUM,
         criteria: list[str] | None = None,
-        constraints: list[tuple[str, str]] | None = None,
-        stakeholders: list[tuple[str, str]] | None = None,
+        constraints: list[str] | None = None,
+        stakeholders: list[str] | None = None,
         methodology: str | None = None,
     ) -> Mission:
         if not title.strip():
@@ -61,16 +61,11 @@ class MissionBacklogService:
                 SuccessCriterion(description=description)
             )
 
-        for kind, description in constraints or []:
-            mission.add_constraint(
-                Constraint(
-                    type=self._constraint_type(kind),
-                    description=description,
-                )
-            )
+        for line in constraints or []:
+            mission.add_constraint(Constraint.parse(line))
 
-        for name, role in stakeholders or []:
-            mission.add_stakeholder(Stakeholder(name=name, role=role))
+        for line in stakeholders or []:
+            mission.add_stakeholder(Stakeholder.parse(line))
 
         self._repository.save(mission)
         logger.info("Mission '%s' added to the backlog (%s).", title, mission.id)
@@ -102,9 +97,9 @@ class MissionBacklogService:
         priority: MissionPriority | None = None,
         add_criteria: list[str] | None = None,
         clear_criteria: bool = False,
-        add_constraints: list[tuple[str, str]] | None = None,
+        add_constraints: list[str] | None = None,
         clear_constraints: bool = False,
-        add_stakeholders: list[tuple[str, str]] | None = None,
+        add_stakeholders: list[str] | None = None,
         clear_stakeholders: bool = False,
         methodology: str | None = None,
     ) -> Mission:
@@ -160,19 +155,14 @@ class MissionBacklogService:
         if clear_constraints:
             mission.clear_constraints()
 
-        for kind, description in add_constraints or []:
-            mission.add_constraint(
-                Constraint(
-                    type=self._constraint_type(kind),
-                    description=description,
-                )
-            )
+        for line in add_constraints or []:
+            mission.add_constraint(Constraint.parse(line))
 
         if clear_stakeholders:
             mission.clear_stakeholders()
 
-        for name, role in add_stakeholders or []:
-            mission.add_stakeholder(Stakeholder(name=name, role=role))
+        for line in add_stakeholders or []:
+            mission.add_stakeholder(Stakeholder.parse(line))
 
         self._repository.save(mission)
 
@@ -252,12 +242,3 @@ class MissionBacklogService:
         )
 
         return project
-
-    def _constraint_type(self, value: str) -> ConstraintType:
-        try:
-            return ConstraintType[value.strip().upper()]
-        except KeyError:
-            valid = ", ".join(item.name.lower() for item in ConstraintType)
-            raise ValueError(
-                f"Unknown constraint type '{value}'. Valid types: {valid}."
-            ) from None

@@ -290,13 +290,27 @@ def test_run_shortcut_still_records_the_mission(monkeypatch, tmp_path, capsys):
     assert missions[0].status.value == "LAUNCHED"
 
 
-def test_a_malformed_constraint_is_rejected(monkeypatch, tmp_path, capsys):
+def test_a_constraint_without_a_category_is_accepted(monkeypatch, tmp_path, capsys):
+    """The CLI and the web app read constraints the same way."""
     install_fake_context(monkeypatch, tmp_path)
 
     assert run(
         ["mission", "add", "X", "obj", "--constraint", "no-colon-here"]
+    ) == 0
+
+    output = capsys.readouterr().out
+
+    assert "no-colon-here" in output
+    assert "[OTHER]" in output
+
+
+def test_a_malformed_stakeholder_is_rejected(monkeypatch, tmp_path, capsys):
+    install_fake_context(monkeypatch, tmp_path)
+
+    assert run(
+        ["mission", "add", "X", "obj", "--stakeholder", "just-a-name"]
     ) == 1
-    assert "type:description" in capsys.readouterr().err
+    assert "Name: role" in capsys.readouterr().err
 
 
 def test_cli_reject_now_requires_feedback_like_the_web(monkeypatch, tmp_path, capsys):

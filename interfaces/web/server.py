@@ -90,20 +90,7 @@ def _lines(value: str) -> list[str]:
     return [line.strip() for line in (value or "").splitlines() if line.strip()]
 
 
-def _pairs(value: str, label: str) -> list[tuple[str, str]]:
-    pairs = []
 
-    for line in _lines(value):
-        left, separator, right = line.partition(":")
-
-        if not separator or not left.strip() or not right.strip():
-            raise ValueError(
-                f"{label} '{line}' must be written as 'name: value'."
-            )
-
-        pairs.append((left.strip(), right.strip()))
-
-    return pairs
 
 
 class ReviewApp:
@@ -461,8 +448,8 @@ class ReviewApp:
                 objective=values["objective"],
                 priority=MissionPriority.parse(values["priority"] or "medium"),
                 criteria=_lines(values["criteria"]),
-                constraints=_pairs(values["constraints"], "Constraint"),
-                stakeholders=_pairs(values["stakeholders"], "Stakeholder"),
+                constraints=_lines(values["constraints"]),
+                stakeholders=_lines(values["stakeholders"]),
                 methodology=values["methodology"] or None,
             )
         except ValueError as error:
@@ -489,11 +476,9 @@ class ReviewApp:
                 clear_criteria=True,
                 add_criteria=_lines(values["criteria"]),
                 clear_constraints=True,
-                add_constraints=_pairs(values["constraints"], "Constraint"),
+                add_constraints=_lines(values["constraints"]),
                 clear_stakeholders=True,
-                add_stakeholders=_pairs(
-                    values["stakeholders"], "Stakeholder"
-                ),
+                add_stakeholders=_lines(values["stakeholders"]),
                 methodology=values["methodology"],
             )
         except ValueError as error:
