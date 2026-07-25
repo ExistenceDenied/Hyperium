@@ -1,0 +1,7 @@
+{
+  "key": "stakeholder-mapping",
+  "name": "Stakeholder Mapping",
+  "description": "Systematic identification of everyone affected by or able to affect an initiative, plotted by influence and interest so that engagement effort is spent where it changes the outcome.",
+  "capabilities": ["BUSINESS_ANALYSIS", "RESEARCH"],
+  "guidance": "Produce a named list of stakeholders grouped by organisational unit, and for each one record their role, what they need from the initiative, what they stand to lose, and their current stance (champion, supporter, neutral, sceptic, blocker). Plot each stakeholder on an influence-versus-interest grid and state the engagement treatment that follows from their quadrant: manage closely, keep satisfied, keep informed, or monitor. Name the decision-makers and the single accountable sponsor explicitly — a map with no identified decision-maker is not finished. Present the analysis as a table so it can be reviewed and updated, and follow it with a short narrative of the two or three relationships that most threaten delivery. Avoid generic job-title placeholders and avoid listing whole departments as if they were a single actor; where a real name is unknown, state the role and flag it as an open action."
+}

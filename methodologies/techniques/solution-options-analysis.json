@@ -1,0 +1,7 @@
+{
+  "key": "solution-options-analysis",
+  "name": "Solution Options Analysis",
+  "description": "Generating a genuine shortlist of ways to meet a need and evaluating them against weighted criteria so that the recommendation is traceable to evidence rather than preference.",
+  "capabilities": ["ARCHITECTURE", "BUSINESS_ANALYSIS"],
+  "guidance": "Present at least three viable options plus the do-nothing baseline, and make them genuinely different in approach — three variants of the same product are one option. Agree the evaluation criteria and their weightings before scoring, deriving them from the requirements and constraints rather than inventing them to fit a preferred answer. Score each option against each criterion in a matrix, showing the reasoning for each score, and follow the matrix with a per-option narrative covering fit, cost, delivery risk, reversibility, and the operating model it implies. Close with a single clear recommendation, the conditions under which you would change it, and the trade-offs the sponsor is accepting by taking it. Do not include straw-man options that exist only to be rejected, and do not let the scoring hide a decision that was actually made on other grounds — if a constraint is decisive, say so."
+}

@@ -1,0 +1,265 @@
+{
+  "key": "business-analysis",
+  "name": "Business Analysis",
+  "description": "The core business analysis engagement: understand the organisation and its stakeholders, analyse the problem and the options for solving it, then specify the change precisely enough to be built and tested. Produces a stakeholder analysis, a current state assessment, a needs analysis, a business case, and a traceable requirements specification.",
+  "version": "1.0",
+  "discipline": "Business Analysis",
+  "principles": [
+    "Understand the problem before proposing a solution.",
+    "Every requirement traces to a business need, and every need traces to a stakeholder.",
+    "Quantify. A gap without a number is an opinion.",
+    "State assumptions explicitly and mark what is evidence and what is inference.",
+    "A requirement that cannot be tested is not a requirement.",
+    "Present options and trade-offs; the sponsor makes the decision, not the analyst."
+  ],
+  "stages": [
+    {
+      "key": "discovery",
+      "name": "Discovery",
+      "description": "Establish who is involved, what the organisation currently does, and where it hurts. The purpose is a shared, evidenced understanding of the present — not yet a solution.",
+      "depends_on": [],
+      "quality_gate": {
+        "description": "Discovery is complete when stakeholders are named with an engagement approach, the current state is documented end to end, and the pain points are evidenced rather than asserted.",
+        "require_approval": true,
+        "minimum_words": 300,
+        "required_sections": ["Findings"]
+      },
+      "deliverables": [
+        {
+          "key": "stakeholder-analysis",
+          "name": "Stakeholder Analysis",
+          "description": "Who is affected by the change, what they need, how much influence they hold, and how each will be engaged.",
+          "sections": [
+            "Stakeholder map",
+            "Interests and influence",
+            "Engagement approach",
+            "Key findings"
+          ],
+          "activities": [
+            {
+              "key": "identify-stakeholders",
+              "name": "Identify stakeholders",
+              "description": "Produce a named list of every party affected by or able to affect the initiative, grouped by organisational unit, with role, interest and the single accountable sponsor identified.",
+              "capabilities": ["BUSINESS_ANALYSIS", "RESEARCH"],
+              "technique": "stakeholder-mapping",
+              "depends_on": []
+            },
+            {
+              "key": "assess-influence-and-interest",
+              "name": "Assess influence and interest",
+              "description": "Plot each stakeholder on an influence-versus-interest grid, record their current stance, and identify the relationships that most threaten delivery.",
+              "capabilities": ["BUSINESS_ANALYSIS"],
+              "technique": "stakeholder-mapping",
+              "depends_on": ["identify-stakeholders"]
+            },
+            {
+              "key": "define-engagement-approach",
+              "name": "Define the engagement approach",
+              "description": "Set out how each stakeholder group will be engaged, consulted and informed through the engagement, with cadence, channel and owner per group.",
+              "capabilities": ["BUSINESS_ANALYSIS", "TECHNICAL_WRITING"],
+              "technique": "stakeholder-mapping",
+              "depends_on": ["assess-influence-and-interest"]
+            }
+          ]
+        },
+        {
+          "key": "current-state-assessment",
+          "name": "Current State Assessment",
+          "description": "What the organisation does today, how it does it, and where the current way of working falls short.",
+          "sections": [
+            "Business context",
+            "Current state processes",
+            "Pain points",
+            "Key findings"
+          ],
+          "activities": [
+            {
+              "key": "map-business-context",
+              "name": "Map the business context",
+              "description": "Describe the business capabilities in scope, their owners, their maturity and the systems that support them, so the change has a stable frame of reference.",
+              "capabilities": ["BUSINESS_ANALYSIS", "RESEARCH"],
+              "technique": "capability-mapping",
+              "depends_on": []
+            },
+            {
+              "key": "document-as-is-process",
+              "name": "Document the as-is process",
+              "description": "Model the current process end to end with actors, handoffs, decision points and exception paths, noting where documented practice and observed practice diverge.",
+              "capabilities": ["BUSINESS_ANALYSIS"],
+              "technique": "process-modelling",
+              "depends_on": ["map-business-context"]
+            },
+            {
+              "key": "capture-pain-points",
+              "name": "Capture pain points",
+              "description": "Record the specific failures, delays, rework loops and workarounds in the current state, each with its location in the process, its frequency and its cost.",
+              "capabilities": ["BUSINESS_ANALYSIS", "RESEARCH"],
+              "technique": "root-cause-analysis",
+              "depends_on": ["document-as-is-process", "identify-stakeholders"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "analysis",
+      "name": "Analysis",
+      "description": "Turn the understanding of the present into a defensible view of what must change and why, and set out the options and the case for acting.",
+      "depends_on": ["discovery"],
+      "quality_gate": {
+        "description": "Analysis is complete when the gaps are quantified, the root causes are evidenced, and a costed recommendation with a do-nothing comparator is on the table.",
+        "require_approval": true,
+        "minimum_words": 350,
+        "required_sections": ["Recommendations"]
+      },
+      "deliverables": [
+        {
+          "key": "needs-analysis",
+          "name": "Needs Analysis",
+          "description": "The business needs behind the stated asks, the measured gap between current and required performance, and the causes underneath.",
+          "sections": [
+            "Business needs",
+            "Gap analysis",
+            "Root causes",
+            "Recommendations"
+          ],
+          "activities": [
+            {
+              "key": "elicit-business-needs",
+              "name": "Elicit business needs",
+              "description": "Separate stated wants from underlying needs and record each need as an atomic, prioritised statement with its source stakeholder and business rationale.",
+              "capabilities": ["BUSINESS_ANALYSIS", "REQUIREMENTS_ENGINEERING"],
+              "technique": "requirements-elicitation",
+              "depends_on": ["capture-pain-points", "define-engagement-approach"]
+            },
+            {
+              "key": "perform-gap-analysis",
+              "name": "Perform gap analysis",
+              "description": "Compare current and required performance on measurable dimensions, size each gap, and rank the gaps by business impact.",
+              "capabilities": ["BUSINESS_ANALYSIS"],
+              "technique": "gap-analysis",
+              "depends_on": ["elicit-business-needs"]
+            },
+            {
+              "key": "analyse-root-causes",
+              "name": "Analyse root causes",
+              "description": "Trace the priority gaps past their symptoms to the structural causes that would have to be removed to stop them recurring.",
+              "capabilities": ["BUSINESS_ANALYSIS", "RESEARCH"],
+              "technique": "root-cause-analysis",
+              "depends_on": ["perform-gap-analysis"]
+            }
+          ]
+        },
+        {
+          "key": "options-and-business-case",
+          "name": "Options and Business Case",
+          "description": "The realistic ways of closing the gaps, evaluated against weighted criteria, and the investment case for the recommended one.",
+          "sections": [
+            "Options considered",
+            "Evaluation",
+            "Costs and benefits",
+            "Recommendations"
+          ],
+          "activities": [
+            {
+              "key": "develop-solution-options",
+              "name": "Develop solution options",
+              "description": "Generate at least three genuinely different options plus a do-nothing baseline and score them against criteria derived from the business needs.",
+              "capabilities": ["BUSINESS_ANALYSIS", "ARCHITECTURE"],
+              "technique": "solution-options-analysis",
+              "depends_on": ["analyse-root-causes"]
+            },
+            {
+              "key": "build-business-case",
+              "name": "Build the business case",
+              "description": "Assemble the strategic, economic and financial argument for the recommended option, with owned and measurable benefits, costs over a stated horizon, and key risks.",
+              "capabilities": ["BUSINESS_ANALYSIS", "TECHNICAL_WRITING"],
+              "technique": "business-case",
+              "depends_on": ["develop-solution-options"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "specification",
+      "name": "Specification",
+      "description": "Express the agreed change precisely enough that it can be estimated, built and tested without further interpretation.",
+      "depends_on": ["analysis"],
+      "quality_gate": {
+        "description": "Specification is complete when scope is bounded, functional and non-functional requirements are testable, and every story traces back to a requirement.",
+        "require_approval": true,
+        "minimum_words": 350,
+        "required_sections": ["Scope"]
+      },
+      "deliverables": [
+        {
+          "key": "requirements-specification",
+          "name": "Requirements Specification",
+          "description": "The complete, identified, prioritised set of functional and non-functional requirements, with their assumptions and constraints.",
+          "sections": [
+            "Scope",
+            "Functional requirements",
+            "Non-functional requirements",
+            "Assumptions and constraints"
+          ],
+          "activities": [
+            {
+              "key": "specify-functional-requirements",
+              "name": "Specify functional requirements",
+              "description": "Write each functional requirement as an atomic, uniquely identified, prioritised and verifiable statement traced to the business need it serves.",
+              "capabilities": ["REQUIREMENTS_ENGINEERING"],
+              "technique": "requirements-elicitation",
+              "depends_on": ["build-business-case"]
+            },
+            {
+              "key": "specify-non-functional-requirements",
+              "name": "Specify non-functional requirements",
+              "description": "Quantify performance, availability, security, accessibility, compliance and retention requirements, each with a measure and a threshold rather than an adjective.",
+              "capabilities": ["REQUIREMENTS_ENGINEERING", "ARCHITECTURE"],
+              "technique": "requirements-elicitation",
+              "depends_on": ["specify-functional-requirements"]
+            }
+          ]
+        },
+        {
+          "key": "user-stories-and-acceptance",
+          "name": "User Stories and Acceptance Criteria",
+          "description": "The requirements expressed as deliverable slices of value with the conditions under which each is agreed to be done.",
+          "sections": [
+            "Scope",
+            "User stories",
+            "Acceptance criteria",
+            "Traceability"
+          ],
+          "activities": [
+            {
+              "key": "write-user-stories",
+              "name": "Write user stories",
+              "description": "Slice the functional requirements into INVEST-compliant stories written from the perspective of the real role that benefits, grouped into epics.",
+              "capabilities": ["REQUIREMENTS_ENGINEERING", "BUSINESS_ANALYSIS"],
+              "technique": "user-story-writing",
+              "depends_on": ["specify-functional-requirements"]
+            },
+            {
+              "key": "write-acceptance-criteria",
+              "name": "Write acceptance criteria",
+              "description": "Give every story Given/When/Then criteria with concrete data, covering happy path, boundaries, invalid input, permissions and failure modes.",
+              "capabilities": ["REQUIREMENTS_ENGINEERING", "TESTING"],
+              "technique": "acceptance-criteria",
+              "depends_on": ["write-user-stories", "specify-non-functional-requirements"]
+            },
+            {
+              "key": "build-traceability-matrix",
+              "name": "Build the traceability matrix",
+              "description": "Produce a matrix linking each business need to its requirements, stories and acceptance criteria, and report any need or requirement with no downstream coverage.",
+              "capabilities": ["REQUIREMENTS_ENGINEERING", "TECHNICAL_WRITING"],
+              "technique": "gap-analysis",
+              "depends_on": ["write-acceptance-criteria"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

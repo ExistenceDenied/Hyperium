@@ -1,6 +1,5 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from core.capabilities.capability import Capability
 from core.resources.resource import Resource
 
 
@@ -11,4 +10,3 @@ class HumanResource(Resource):
     """
 
     role: str = ""
-    capabilities: set[Capability] = field(default_factory=set)  # type: ignore[assignment]

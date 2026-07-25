@@ -1,0 +1,7 @@
+{
+  "key": "acceptance-criteria",
+  "name": "Acceptance Criteria",
+  "description": "Defining the specific, observable conditions under which a requirement or story is agreed to be satisfied, written so that they can be executed as tests.",
+  "capabilities": ["REQUIREMENTS_ENGINEERING", "TESTING"],
+  "guidance": "Write criteria in Given/When/Then form, with one scenario per behaviour and concrete example data rather than abstract placeholders. Cover the happy path first, then the boundary values, the invalid inputs, the permission and role variations, and the failure modes of anything the behaviour depends on — a story with only a happy-path criterion is not ready. Every criterion must be objectively verifiable by someone who did not write it: replace 'quickly', 'correctly' and 'user-friendly' with a measurable threshold or a named rule. Number the criteria and link each back to the story or requirement identifier it verifies so that coverage can be traced. Keep implementation detail out — criteria describe what is observed, not how it is built."
+}

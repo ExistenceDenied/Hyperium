@@ -48,5 +48,9 @@ class CapabilityCatalog:
         return cls._capabilities[key]
 
     @classmethod
+    def keys(cls) -> tuple[str, ...]:
+        return tuple(cls._capabilities)
+
+    @classmethod
     def all(cls) -> tuple[Capability, ...]:
         return tuple(cls._capabilities.values())

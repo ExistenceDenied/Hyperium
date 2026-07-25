@@ -1,0 +1,7 @@
+{
+  "key": "process-modelling",
+  "name": "Process Modelling",
+  "description": "BPMN-style modelling of a business process — as-is or to-be — showing actors, activities, decision points, handoffs and exceptions end to end.",
+  "capabilities": ["BUSINESS_ANALYSIS", "ARCHITECTURE"],
+  "guidance": "Model the process end to end from its triggering event to its terminating outcome, using swimlanes for each actor or system so that every handoff between lanes is visible. For each step record the actor, the input consumed, the output produced, the system used, and the rule applied; for each decision point state the condition and every branch, including the exception and rework paths that practitioners actually follow. Express the model as a numbered step list plus a text or Mermaid flow diagram, and call out explicitly where the documented process and the observed process diverge. Note cycle time, volume and handoff count per step where they are known, and mark them as assumptions where they are not. Do not model a happy path only — the exceptions are where the cost lives — and do not invent steps to make the flow tidy; an honest gap is more useful than a fabricated one."
+}

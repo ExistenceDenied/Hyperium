@@ -1,0 +1,7 @@
+{
+  "key": "business-case",
+  "name": "Business Case",
+  "description": "The structured argument for investment — costs, benefits, risks and the do-nothing option — assembled so that a sponsor can make a defensible decision.",
+  "capabilities": ["BUSINESS_ANALYSIS", "TECHNICAL_WRITING"],
+  "guidance": "Open with the decision being asked for and the recommendation, then support it: strategic case (why this, why now), economic case (options and their net value), commercial and delivery case (how it will be procured and run), and financial case (what it costs and who pays). Quantify benefits as cash-releasing, cost-avoiding, or non-financial, and for each one name the owner, the measure, the baseline, and the date by which it is expected to land — an unowned, unmeasured benefit is not a benefit. Always include the do-nothing option costed on the same basis as the others, because it is the true comparator. Show the costs over a stated horizon including run costs and change costs, not just build costs, and state payback period and the key sensitivities. Be explicit about assumptions and confidence; a range with stated reasoning is more credible than a single fabricated number."
+}

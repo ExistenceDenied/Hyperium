@@ -25,3 +25,8 @@ Thumbs.db
 
 # Environment
 .env
+
+# Generated engagement output
+workspace/*
+!workspace/__init__.py
+logs/*.log

@@ -1,4 +1,3 @@
-from core.capabilities.capability_requirement import CapabilityRequirement
 from core.execution.activity import Activity
 from core.resources.resource import Resource
 

@@ -1,6 +1,27 @@
 # Hyperium AI Architecture
 
-Version: 0.1
+> Version: 0.1
+> Status: **HISTORICAL — SUPERSEDED**
+
+---
+
+> ## ⚠ HISTORICAL DOCUMENT
+>
+> This is the original v0.1 architecture sketch. It is kept for provenance only.
+> **It is not the current architecture and must not be used as a reference.**
+>
+> It is superseded in full by the **v1.0 series** in [`docs/architecture/`](architecture/),
+> and specifically by:
+>
+> - [ADR-001 – Mission Driven Architecture](architecture/ADR-001-mission-driven-architecture.md) — **Mission**, not Project, is the highest-level business concept. This document's "Everything is a Project" principle is superseded.
+> - [ADR-002 – Bounded Contexts](architecture/ADR-002-bounded-contexts.md) — Missions / Analysis / Planning / Execution / Knowledge / AI Infrastructure.
+> - [ADR-003 – Capability Based Execution](architecture/ADR-003-capability-based-execution.md) — work is assigned to **Capabilities**, not Agents. This document's "Agents receive Tasks" and CEO → Scheduler → Tasks → Agents chain are superseded.
+> - [00-core-domain.md](architecture/00-core-domain.md) — the current ubiquitous language. "Task" is retired vocabulary; the atomic unit of work is the **Activity**.
+>
+> Principles from this document that **did survive** into v1.0 are restated there:
+> deliverables as first-class citizens, deterministic workflow with AI producing
+> content only, communication through deliverables rather than messages, and a
+> replaceable LLM layer.
 
 ---
 

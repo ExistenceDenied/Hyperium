@@ -1,6 +1,38 @@
 # Hyperium Runtime
 
 > Version: 1.0
+> Status: **PARTIALLY SUPERSEDED**
+
+---
+
+> ## ⚠ SUPERSEDED NOTICE
+>
+> The agent-resolution mechanics described here are superseded by
+> [ADR-003 – Capability Based Execution](ADR-003-capability-based-execution.md).
+> The Runtime no longer resolves a Work Item to an Agent; it allocates a
+> **Resource** to an **Activity** by matching **Capabilities**.
+>
+> **Superseded sections — do not build against these:**
+>
+> | Section | Superseded by |
+> |---|---|
+> | *Responsibilities* — "executing Work Items", "selecting the appropriate Agent" | Executing **Activities**; allocating a **Resource** whose Capabilities satisfy the Activity's `required_capabilities`. |
+> | *Runtime Components* diagram (`Scheduler → Agent Registry → Agent`) | `Execution Plan → Capability Matcher → Resource Allocator → Resource` (`application/execution/`). |
+> | *Agent Registry* (the whole section) | **Capability Catalogue** + **Capability Matcher** + **Resource Allocator**. `AgentRegistry` is retired. |
+> | *Execution Cycle* — "Select Work Item → Resolve Agent → Execute Agent" | "Select Activity (topological order) → Match Capabilities → Allocate Resource → Execute → Store Deliverable Version → Review". |
+> | *Workflow Instance* — "active work items / completed work items" | Read **Activities**. |
+> | *Scheduler* — "selecting executable Work Items" | Read **Activities**; ordering is produced by the Activity dependency graph (`core/planning/dependency_graph.py`). |
+>
+> **Still valid — this document remains the reference for:**
+>
+> - the separation of orchestration from execution (the guiding principle)
+> - the Review Loop and the rule that a rejected Deliverable generates follow-up work
+> - State Tracking: the Runtime owns execution state, executing Resources do not
+> - Failure Handling responsibilities: retry policies, timeouts, dependency failures, invalid results, logging — **none of which are implemented yet** (see [11-gap-analysis.md](11-gap-analysis.md))
+> - Future Capabilities, of which human approval tasks and persistent execution are now in progress
+>
+> Where the valid sections say "Agent", read **Resource**. Where they say
+> "Work Item", read **Activity**.
 
 ---
 

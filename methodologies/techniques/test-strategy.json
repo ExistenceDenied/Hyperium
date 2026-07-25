@@ -1,0 +1,7 @@
+{
+  "key": "test-strategy",
+  "name": "Test Strategy",
+  "description": "The risk-based plan for how a solution will be verified and validated — what is tested, at which level, by whom, against what entry and exit criteria.",
+  "capabilities": ["TESTING", "ARCHITECTURE"],
+  "guidance": "Start from risk: state what would be most damaging if it failed in production, and let that drive where test effort is concentrated rather than spreading coverage evenly. Define the levels in play — unit, integration, contract, system, performance, security, accessibility, user acceptance — and for each state its objective, owner, environment, test data approach, and entry and exit criteria. State explicitly what is in and out of test scope, how defects are triaged and by what severity definitions, and what the release gate is in measurable terms. Cover environments and data: where they come from, how production-like they are, and how personal data is handled. Avoid coverage percentages as the primary goal and avoid strategies that only describe the happy path; name the specific scenarios where this solution is most likely to break."
+}

@@ -1,6 +1,5 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from core.capabilities.capability import Capability
 from core.resources.resource import Resource
 
 
@@ -12,4 +11,3 @@ class ExternalServiceResource(Resource):
 
     service_name: str = ""
     endpoint: str | None = None
-    capabilities: set[Capability] = field(default_factory=set)  # type: ignore[assignment]

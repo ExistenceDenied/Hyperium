@@ -1,0 +1,284 @@
+{
+  "key": "solution-delivery",
+  "name": "Solution Delivery",
+  "description": "An end-to-end software delivery engagement: frame the problem and baseline the requirements, design the architecture and the detail, plan and specify the build, then define how the solution is verified and judged ready to release.",
+  "version": "1.0",
+  "discipline": "Software Delivery",
+  "principles": [
+    "Design decisions are recorded with their alternatives and their trade-offs, not just their conclusions.",
+    "Non-functional requirements are design inputs, not late discoveries.",
+    "Slice work so that each increment is independently valuable and independently testable.",
+    "Test effort follows risk, not uniform coverage.",
+    "Reversible decisions are made fast; irreversible ones are made deliberately.",
+    "Nothing is 'done' without agreed, observable acceptance criteria."
+  ],
+  "stages": [
+    {
+      "key": "discovery",
+      "name": "Discovery",
+      "description": "Frame the problem, bound the scope, and baseline what the solution must do before any design work begins.",
+      "depends_on": [],
+      "quality_gate": {
+        "description": "Discovery is complete when the problem, scope and success measures are agreed and the requirements baseline is testable.",
+        "require_approval": true,
+        "minimum_words": 300,
+        "required_sections": ["Scope"]
+      },
+      "deliverables": [
+        {
+          "key": "solution-brief",
+          "name": "Solution Brief",
+          "description": "The problem being solved, who it is being solved for, what is in and out of scope, and how success will be judged.",
+          "sections": [
+            "Problem statement",
+            "Scope and boundaries",
+            "Stakeholders",
+            "Success measures"
+          ],
+          "activities": [
+            {
+              "key": "frame-the-problem",
+              "name": "Frame the problem",
+              "description": "State the problem in business terms with its cost and its affected parties, and identify the sponsor and the decision-makers for the delivery.",
+              "capabilities": ["BUSINESS_ANALYSIS", "RESEARCH"],
+              "technique": "stakeholder-mapping",
+              "depends_on": []
+            },
+            {
+              "key": "define-scope-and-success",
+              "name": "Define scope and success measures",
+              "description": "Bound what is in and explicitly out of scope, and define the measurable outcomes that will determine whether the delivery succeeded.",
+              "capabilities": ["BUSINESS_ANALYSIS"],
+              "technique": "gap-analysis",
+              "depends_on": ["frame-the-problem"]
+            }
+          ]
+        },
+        {
+          "key": "requirements-baseline",
+          "name": "Requirements Baseline",
+          "description": "The agreed functional and non-functional requirements and the stories that carry them into delivery.",
+          "sections": [
+            "Scope",
+            "Functional requirements",
+            "Non-functional requirements",
+            "Delivery backlog"
+          ],
+          "activities": [
+            {
+              "key": "elicit-requirements",
+              "name": "Elicit requirements",
+              "description": "Produce identified, prioritised, verifiable functional and non-functional requirements, with assumptions, constraints and open questions recorded.",
+              "capabilities": ["REQUIREMENTS_ENGINEERING", "BUSINESS_ANALYSIS"],
+              "technique": "requirements-elicitation",
+              "depends_on": ["define-scope-and-success"]
+            },
+            {
+              "key": "write-delivery-stories",
+              "name": "Write delivery stories",
+              "description": "Slice the requirements into vertically sliced, INVEST-compliant stories grouped into epics and prioritised for delivery sequencing.",
+              "capabilities": ["REQUIREMENTS_ENGINEERING"],
+              "technique": "user-story-writing",
+              "depends_on": ["elicit-requirements"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "design",
+      "name": "Design",
+      "description": "Choose and record the target architecture, then take it down to the component, domain and interface detail a team can build from.",
+      "depends_on": ["discovery"],
+      "quality_gate": {
+        "description": "Design is complete when the architecture decision is recorded with its alternatives, the domain and interfaces are specified, and the delivery risks are owned.",
+        "require_approval": true,
+        "minimum_words": 350,
+        "required_sections": ["Risks"]
+      },
+      "deliverables": [
+        {
+          "key": "solution-architecture",
+          "name": "Solution Architecture",
+          "description": "The target architecture, the options rejected in reaching it, and the risks it carries.",
+          "sections": [
+            "Architecture overview",
+            "Options and decisions",
+            "Non-functional design",
+            "Risks"
+          ],
+          "activities": [
+            {
+              "key": "evaluate-architecture-options",
+              "name": "Evaluate architecture options",
+              "description": "Score at least three viable architectural approaches against weighted criteria derived from the requirements, and recommend one with its trade-offs stated.",
+              "capabilities": ["ARCHITECTURE"],
+              "technique": "solution-options-analysis",
+              "depends_on": ["elicit-requirements"]
+            },
+            {
+              "key": "define-target-architecture",
+              "name": "Define the target architecture",
+              "description": "Describe the components, their responsibilities, the data flows between them and how the non-functional requirements are satisfied by the design.",
+              "capabilities": ["ARCHITECTURE"],
+              "technique": "capability-mapping",
+              "depends_on": ["evaluate-architecture-options"]
+            },
+            {
+              "key": "assess-delivery-risks",
+              "name": "Assess delivery risks",
+              "description": "Produce a ranked risk register covering dependency, data, capability, adoption and third-party risk, each with an owner, treatment and residual rating.",
+              "capabilities": ["ARCHITECTURE", "BUSINESS_ANALYSIS"],
+              "technique": "risk-assessment",
+              "depends_on": ["define-target-architecture"]
+            }
+          ]
+        },
+        {
+          "key": "detailed-design",
+          "name": "Detailed Design",
+          "description": "The domain model, component design and interface contracts the build will implement.",
+          "sections": [
+            "Domain model",
+            "Component design",
+            "Interfaces and contracts",
+            "Risks"
+          ],
+          "activities": [
+            {
+              "key": "model-the-domain",
+              "name": "Model the domain",
+              "description": "Define the entities, relationships, invariants, lifecycles and business rules in the language of the business, with a glossary of terms.",
+              "capabilities": ["ARCHITECTURE", "SOFTWARE_DEVELOPMENT"],
+              "technique": "domain-modelling",
+              "depends_on": ["define-target-architecture"]
+            },
+            {
+              "key": "specify-interfaces",
+              "name": "Specify interfaces and contracts",
+              "description": "Define each interface between components and to external systems: operations, payloads, errors, idempotency, versioning and the failure behaviour on each side.",
+              "capabilities": ["ARCHITECTURE", "SOFTWARE_DEVELOPMENT"],
+              "technique": "domain-modelling",
+              "depends_on": ["model-the-domain"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "build",
+      "name": "Build",
+      "description": "Sequence the implementation into increments, specify how each component is to be built, and agree what done means before work starts.",
+      "depends_on": ["design"],
+      "quality_gate": {
+        "description": "Build planning is complete when the increments are sequenced against real dependencies, each component has an implementation specification, and the definition of done is agreed.",
+        "require_approval": true,
+        "minimum_words": 300,
+        "required_sections": ["Implementation"]
+      },
+      "deliverables": [
+        {
+          "key": "implementation-plan",
+          "name": "Implementation Plan",
+          "description": "How the solution is built: the increments, their order, the component-level specifications, and the definition of done.",
+          "sections": [
+            "Work breakdown",
+            "Sequencing and dependencies",
+            "Implementation notes",
+            "Definition of done"
+          ],
+          "activities": [
+            {
+              "key": "plan-implementation-increments",
+              "name": "Plan implementation increments",
+              "description": "Break the build into increments that each end in something demonstrable, showing hard dependencies separately from convenient ordering.",
+              "capabilities": ["SOFTWARE_DEVELOPMENT", "ARCHITECTURE"],
+              "technique": "implementation-roadmap",
+              "depends_on": ["specify-interfaces", "assess-delivery-risks"]
+            },
+            {
+              "key": "specify-component-implementation",
+              "name": "Specify component implementation",
+              "description": "For each component, state its responsibilities, its collaborators, the patterns and libraries to be used, its error handling and its observability requirements.",
+              "capabilities": ["SOFTWARE_DEVELOPMENT", "ARCHITECTURE"],
+              "technique": "domain-modelling",
+              "depends_on": ["plan-implementation-increments"]
+            },
+            {
+              "key": "define-done-criteria",
+              "name": "Define done criteria",
+              "description": "Agree the definition of done for an increment — tests, review, documentation, non-functional thresholds — and the acceptance criteria for the priority stories.",
+              "capabilities": ["SOFTWARE_DEVELOPMENT", "TESTING"],
+              "technique": "acceptance-criteria",
+              "depends_on": ["write-delivery-stories", "specify-component-implementation"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "test",
+      "name": "Test",
+      "description": "Define how the solution is verified and validated, design the tests that carry the most risk, and judge release readiness.",
+      "depends_on": ["build"],
+      "quality_gate": {
+        "description": "Test is complete when the strategy is risk-based with stated exit criteria, the priority scenarios are designed, and a readiness recommendation with residual risk is on record.",
+        "require_approval": true,
+        "minimum_words": 300,
+        "required_sections": ["Risks"]
+      },
+      "deliverables": [
+        {
+          "key": "test-strategy-and-plan",
+          "name": "Test Strategy and Plan",
+          "description": "What is tested, at which level, in what environment, with what data, and against what exit criteria.",
+          "sections": [
+            "Test strategy",
+            "Test scope and levels",
+            "Test scenarios",
+            "Risks and coverage"
+          ],
+          "activities": [
+            {
+              "key": "define-test-strategy",
+              "name": "Define the test strategy",
+              "description": "Set the levels, ownership, environments, data approach, defect triage and release exit criteria, concentrating effort where production failure would be most damaging.",
+              "capabilities": ["TESTING", "ARCHITECTURE"],
+              "technique": "test-strategy",
+              "depends_on": ["define-done-criteria"]
+            },
+            {
+              "key": "design-test-scenarios",
+              "name": "Design test scenarios",
+              "description": "Write executable Given/When/Then scenarios for the priority stories covering happy path, boundaries, invalid input, permissions and dependency failure.",
+              "capabilities": ["TESTING"],
+              "technique": "acceptance-criteria",
+              "depends_on": ["define-test-strategy"]
+            }
+          ]
+        },
+        {
+          "key": "readiness-assessment",
+          "name": "Release Readiness Assessment",
+          "description": "Whether the solution should go live, on what evidence, and with what residual risk accepted.",
+          "sections": [
+            "Readiness summary",
+            "Defects and gaps",
+            "Risks and coverage",
+            "Go-live recommendation"
+          ],
+          "activities": [
+            {
+              "key": "assess-release-readiness",
+              "name": "Assess release readiness",
+              "description": "Judge readiness against the exit criteria, list open defects and coverage gaps by severity, and give a go, no-go or conditional recommendation with the residual risks named and owned.",
+              "capabilities": ["TESTING", "BUSINESS_ANALYSIS"],
+              "technique": "risk-assessment",
+              "depends_on": ["design-test-scenarios"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

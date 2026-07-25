@@ -1,6 +1,34 @@
 # Hyperium Domain Model
 
 > Version: 1.0
+> Status: **PARTIALLY SUPERSEDED**
+
+---
+
+> ## ⚠ SUPERSEDED NOTICE
+>
+> Parts of this document are superseded by
+> [ADR-001 – Mission Driven Architecture](ADR-001-mission-driven-architecture.md)
+> and [ADR-003 – Capability Based Execution](ADR-003-capability-based-execution.md).
+>
+> **Superseded sections — do not build against these:**
+>
+> | Section | Superseded by |
+> |---|---|
+> | *Domain Overview* (the `Work Item → Agent` chain) | `Mission → Analysis → Project → Activity → Required Capability → Resource → Deliverable → Version → Review` |
+> | *Work Item* | **Activity** (`core/execution/activity.py`). Activity is the atomic unit of work. "Work Item" is retired vocabulary. |
+> | *Agent* (as a domain concept work is assigned to) | **Capability** + **Resource**. An Activity declares `required_capabilities`; a Resource (Human, AI, Tool, External Service) that provides those capabilities is allocated to it. Role names (Business Analyst, Solution Architect, …) survive as **capability prompt strategies** bound to a Capability — not as classes bound to work. |
+> | *Project* as "the highest-level business entity" | **Mission** is the highest-level business concept (ADR-001). A Project is the execution vehicle created **from** a Mission after Mission Analysis. |
+> | *Relationships*: "Each Work Item is executed by one Agent" | An Activity requires one or more Capabilities; allocation to a Resource happens at planning time and may change between runs. |
+>
+> **Still valid — this document remains the reference for:**
+>
+> - Methodology, Workflow and Stage
+> - Deliverable and Deliverable Version (versioning semantics)
+> - Review (approve / request improvements / reject, and review-generated follow-up work)
+> - the guiding principle that every feature must map onto a domain concept
+>
+> Where the valid sections say "Work Item", read **Activity**.
 
 ---
 
