@@ -34,6 +34,36 @@ from infrastructure.persistence.mission_repository import MissionRepository
 from infrastructure.persistence.project_repository import ProjectRepository
 
 
+def build_activity_executor(settings: Settings):
+    """
+    The agentic executor for engagements: activities run as tool-using agents.
+
+    The tools are read-only and scoped to the workspace, and side effects are
+    denied — an engagement may run unattended (from the web UI), so it must not
+    act on anything without a person present. The agent's gain here is grounding
+    deliverable content in real files rather than only prior knowledge.
+    """
+    from application.agent.agent_runner import AgentRunner
+    from application.agent.approval_policies import AutoDenyApprover
+    from application.execution.agent_activity_executor import AgentActivityExecutor
+    from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
+    from infrastructure.tools import read_only_tools
+
+    provider = OllamaAgentProvider(
+        model=settings.model,
+        timeout_seconds=settings.llm_timeout_seconds,
+        temperature=settings.temperature,
+    )
+
+    return AgentActivityExecutor(
+        AgentRunner(
+            provider,
+            read_only_tools(settings.workspace),
+            approver=AutoDenyApprover(),
+        )
+    )
+
+
 def build_context(settings: Settings):
     provider = ResilientProvider(
         OllamaProvider(
@@ -56,6 +86,7 @@ def build_context(settings: Settings):
         repository=repository,
         methodologies=methodologies,
         default_methodology=settings.default_methodology,
+        activity_executor=build_activity_executor(settings),
     )
 
     return service, repository

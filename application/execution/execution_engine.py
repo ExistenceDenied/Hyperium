@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from application.execution.activity_executor import ActivityExecutor
 from core.execution.activity import Activity
 from core.execution.deliverable import Deliverable
 from core.execution.deliverable_status import DeliverableStatus
@@ -9,9 +10,7 @@ from core.execution.execution_plan import ExecutionPlan
 from core.execution.execution_result import ExecutionResult, ExecutionStatus
 from core.execution.prompting.activity_prompt_builder import ActivityPromptBuilder
 from core.interfaces.artifact_store import ArtifactStore
-from core.interfaces.llm_provider import LLMProvider
 from core.missions.mission import Mission
-from core.resources.ai_resource import AIResource
 from core.resources.resource import Resource
 
 logger = logging.getLogger(__name__)
@@ -29,11 +28,11 @@ class ExecutionEngine:
 
     def __init__(
         self,
-        llm: LLMProvider,
+        executor: ActivityExecutor,
         artifact_store: ArtifactStore,
         prompt_builder: ActivityPromptBuilder | None = None,
     ) -> None:
-        self._llm = llm
+        self._executor = executor
         self._artifacts = artifact_store
         self._prompts = prompt_builder or ActivityPromptBuilder()
 
@@ -63,12 +62,12 @@ class ExecutionEngine:
 
     def _is_executable(self, plan: ExecutionPlan, activity: Activity) -> bool:
         """
-        Only AI resources execute autonomously. Human and tool resources are
-        modelled and allocated, but their work happens outside Hyperium.
+        Only autonomous resources execute here. Human and tool resources are
+        modelled and allocated, but their work is submitted from outside.
         """
         resource = plan.get_resource(activity)
 
-        return resource is not None and isinstance(resource, AIResource)
+        return resource is not None and resource.executes_autonomously
 
     def _run(
         self,
@@ -105,7 +104,7 @@ class ExecutionEngine:
         )
 
         try:
-            content = self._llm.generate(prompt)
+            content = self._executor.execute(prompt, activity)
         except Exception as error:
             activity.fail()
             logger.error("Activity '%s' failed: %s", activity.key, error)
@@ -253,7 +252,7 @@ class ExecutionEngine:
                     f"No resource has the capabilities for activity "
                     f"'{activity.key}'."
                 )
-            elif not isinstance(resource, AIResource):
+            elif not resource.executes_autonomously:
                 result.add_message(
                     f"Activity '{activity.key}' is allocated to "
                     f"'{resource.name}' and awaits work outside Hyperium."

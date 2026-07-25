@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from application.analysis.analysis_service import AnalysisService
+from application.execution.activity_executor import (
+    ActivityExecutor,
+    LlmActivityExecutor,
+)
 from application.execution.capability_matcher import CapabilityMatcher
 from application.execution.execution_engine import ExecutionEngine
 from application.execution.resource_allocator import ResourceAllocator
@@ -33,8 +37,15 @@ class ProjectBuilder:
         allocator: ResourceAllocator | None = None,
         methodologies=None,
         default_methodology: str | None = None,
+        activity_executor: ActivityExecutor | None = None,
     ) -> ProjectService:
         catalogue = methodologies.all() if methodologies else []
+
+        # Analysis stays a single completion — it recommends a methodology and
+        # nothing more. Only activity content production is pluggable, defaulting
+        # to the one-shot LLM so behaviour is unchanged unless a caller opts into
+        # an agentic executor.
+        executor = activity_executor or LlmActivityExecutor(llm)
 
         return ProjectService(
             analysis_service=AnalysisService(
@@ -47,7 +58,7 @@ class ProjectBuilder:
                 default_methodology=default_methodology,
             ),
             execution_engine=ExecutionEngine(
-                llm,
+                executor,
                 artifact_store,
                 prompt_builder=ActivityPromptBuilder(techniques=methodologies),
             ),

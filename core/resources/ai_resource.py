@@ -11,3 +11,7 @@ class AIResource(Resource):
 
     provider: str = ""
     model: str = ""
+
+    @property
+    def executes_autonomously(self) -> bool:
+        return True

@@ -259,7 +259,7 @@ def _submission_forms(project: Project, deliverable: Deliverable) -> str:
 
         resource = plan.get_resource(activity)
 
-        if resource is None or type(resource).__name__ == "AIResource":
+        if resource is None or resource.executes_autonomously:
             continue
 
         if not plan.is_ready(activity):

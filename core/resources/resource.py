@@ -16,6 +16,20 @@ class Resource(ABC):
     name: str
     capabilities: dict[Capability, ProficiencyLevel] = field(default_factory=dict)
 
+    @property
+    def executes_autonomously(self) -> bool:
+        """
+        Whether Hyperium runs this resource's work itself, or waits for the
+        work to be submitted from outside.
+
+        This is what separates a resource the engine can execute — today an AI
+        model — from a human or an external tool, whose work arrives through
+        `submit`. Answering it here, rather than by type-checking at each call
+        site, is what lets a new autonomous resource type be added without
+        editing the engine.
+        """
+        return False
+
     def has_capability(self, capability: Capability) -> bool:
         return capability in self.capabilities
 

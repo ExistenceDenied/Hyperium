@@ -9,7 +9,6 @@ from application.planning.planning_application_service import (
 )
 from core.missions.mission import Mission
 from core.project.project import Project
-from core.resources.ai_resource import AIResource
 from core.resources.resource import Resource
 
 logger = logging.getLogger(__name__)
@@ -146,11 +145,11 @@ class ProjectService:
 
         resource = plan.get_resource(activity)
 
-        if isinstance(resource, AIResource):
+        if resource is not None and resource.executes_autonomously:
             raise ValueError(
-                f"Activity '{activity_key}' is allocated to the AI resource "
-                f"'{resource.name}' and is executed by Hyperium. Reallocate "
-                f"it before submitting work by hand."
+                f"Activity '{activity_key}' is allocated to the autonomous "
+                f"resource '{resource.name}' and is executed by Hyperium. "
+                f"Reallocate it before submitting work by hand."
             )
 
         if not plan.is_ready(activity):
