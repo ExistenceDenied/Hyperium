@@ -20,6 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
+from core.missions.mission import MissionStateError
 from core.missions.mission_priority import MissionPriority
 from core.project.project import UnknownDeliverableError
 from interfaces.web import backlog_pages, methodology_pages, pages
@@ -221,6 +222,10 @@ class ReviewApp:
             if match:
                 try:
                     return handler(data, **match.groupdict())
+                except MissionStateError as error:
+                    # The thing exists; it is the state that forbids this.
+                    # Saying "not found" would be a lie.
+                    return 409, error_page(str(error), code=409)
                 except EXPECTED as error:
                     return code, error_page(str(error), code=code)
 
@@ -420,7 +425,7 @@ class ReviewApp:
         backlog = self._require_backlog()
 
         return 200, backlog_pages.mission_form(
-            mission=backlog.get(UUID(key)),
+            mission=backlog.for_editing(UUID(key)),
             methodologies=self._catalogue(),
         )
 

@@ -617,3 +617,33 @@ def test_navigation_is_present_on_every_section(tmp_path):
 
         assert "href='/missions'" in body
         assert "href='/methodologies'" in body
+
+
+def test_the_edit_form_is_refused_for_a_launched_mission(tmp_path):
+    """
+    Regression: the Edit link was hidden, but navigating to the edit URL
+    directly — a bookmark, the back button, a typed address — rendered a full
+    form that only refused on submit, after the work was done.
+    """
+    app, backlog, _ = build(tmp_path)
+    add(app, methodology="test-two-stage")
+    mission = backlog.list()[0]
+    app.post(f"/missions/{mission.id}/launch", {"methodology": [""]})
+
+    status, body = app.get(f"/missions/{mission.id}/edit", {})
+
+    assert status == 409  # it exists; its state forbids editing
+    assert "cannot be edited" in body
+    assert "name='title'" not in body
+
+
+def test_the_edit_form_is_refused_for_an_archived_mission(tmp_path):
+    app, backlog, _ = build(tmp_path)
+    add(app)
+    mission = backlog.list()[0]
+    app.post(f"/missions/{mission.id}/archive", {})
+
+    status, body = app.get(f"/missions/{mission.id}/edit", {})
+
+    assert status == 409
+    assert "cannot be edited" in body

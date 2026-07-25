@@ -77,6 +77,27 @@ class MissionBacklogService:
     def get(self, mission_id: UUID) -> Mission:
         return self._repository.get(mission_id)
 
+    def for_editing(self, mission_id: UUID) -> Mission:
+        """
+        Return a mission that may be edited, or explain why it may not.
+
+        An interface should ask this *before* rendering an edit form. Showing
+        a form that will be refused on submit asks someone to do work that was
+        never going to be accepted.
+        """
+        mission = self._repository.get(mission_id)
+
+        self._reject_if_frozen(mission)
+
+        return mission
+
+    def _reject_if_frozen(self, mission: Mission) -> None:
+        if not mission.is_editable:
+            raise MissionStateError(
+                f"Mission '{mission.title}' is {mission.status.value} and "
+                f"cannot be edited. Restore it or create a new mission."
+            )
+
     def list(
         self,
         status: MissionStatus | None = None,
@@ -118,11 +139,8 @@ class MissionBacklogService:
             ]
         )
 
-        if changes_content and not mission.is_editable:
-            raise MissionStateError(
-                f"Mission '{mission.title}' is {mission.status.value} and "
-                f"cannot be edited. Restore it or create a new mission."
-            )
+        if changes_content:
+            self._reject_if_frozen(mission)
 
         if title is not None:
             if not title.strip():
