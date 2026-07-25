@@ -279,8 +279,203 @@ def test_a_launched_mission_is_shown_as_frozen(tmp_path):
 
     _, body = app.get(f"/missions/{mission.id}", {})
 
-    assert "Open the engagement" in body
+    assert "Open the full engagement" in body
     assert "frozen" in body
+    assert "Edit</a>" not in body
+
+
+def test_the_mission_shows_the_deliverables_it_produced(tmp_path):
+    """The thing a user asks for by name: what did this mission produce?"""
+    app, backlog, _ = build(tmp_path)
+    add(app, methodology="test-two-stage")
+    mission = backlog.list()[0]
+    app.post(f"/missions/{mission.id}/launch", {"methodology": [""]})
+
+    _, body = app.get(f"/missions/{mission.id}", {})
+
+    assert "Training Requirements" in body
+    assert "requirements-v1.md" in body
+    assert "AWAITING APPROVAL" in body
+    assert "Download" in body
+
+
+def test_the_mission_shows_stage_gates(tmp_path):
+    app, backlog, _ = build(tmp_path)
+    add(app, methodology="test-two-stage")
+    mission = backlog.list()[0]
+    app.post(f"/missions/{mission.id}/launch", {"methodology": [""]})
+
+    _, body = app.get(f"/missions/{mission.id}", {})
+
+    assert "Discovery" in body
+    assert "gate not met" in body
+    assert "has not been approved" in body
+
+
+def test_an_unreadable_engagement_is_reported_on_the_mission(tmp_path):
+    """Showing a launched mission with no deliverables would be a lie."""
+    app, backlog, projects = build(tmp_path)
+    add(app, methodology="test-two-stage")
+    mission = backlog.list()[0]
+    app.post(f"/missions/{mission.id}/launch", {"methodology": [""]})
+
+    path = (tmp_path / "state") / f"{backlog.get(mission.id).project_id}.json"
+    path.write_text("{ not json", encoding="utf-8")
+
+    _, body = app.get(f"/missions/{mission.id}", {})
+
+    assert "could not be read" in body
+
+
+# ---------------------------------------------------- fields that were lost
+
+
+def test_editing_saves_the_methodology(tmp_path):
+    """
+    Regression: the edit form rendered a methodology select and the handler
+    never passed it, so the control silently did nothing.
+    """
+    app, backlog, _ = build(tmp_path)
+    add(app, methodology="")
+    mission = backlog.list()[0]
+
+    app.post(
+        f"/missions/{mission.id}/edit",
+        {
+            "title": ["Onboarding Redesign"],
+            "objective": ["Halve time-to-first-value."],
+            "priority": ["HIGH"],
+            "criteria": ["Active in 14 days."],
+            "constraints": [""],
+            "stakeholders": [""],
+            "methodology": ["test-two-stage"],
+        },
+    )
+
+    assert backlog.get(mission.id).methodology == "test-two-stage"
+
+
+def test_stakeholders_can_be_captured_and_edited(tmp_path):
+    app, backlog, _ = build(tmp_path)
+
+    add(app, stakeholders="Priya: Head of Customer Success\nSam: CFO")
+    mission = backlog.list()[0]
+
+    assert [(s.name, s.role) for s in mission.stakeholders] == [
+        ("Priya", "Head of Customer Success"),
+        ("Sam", "CFO"),
+    ]
+
+    _, body = app.get(f"/missions/{mission.id}", {})
+    assert "Priya — Head of Customer Success" in body
+
+
+def test_a_malformed_stakeholder_is_rejected_without_losing_the_form(tmp_path):
+    app, backlog, _ = build(tmp_path)
+
+    status, body = add(app, stakeholders="just a name")
+
+    assert status == 400
+    assert "must be written as" in body
+    assert "Halve time-to-first-value." in body
+    assert backlog.list() == []
+
+
+# --------------------------------------------------------- other actions
+
+
+def test_a_complete_draft_can_be_marked_ready(tmp_path):
+    app, backlog, _ = build(tmp_path)
+    add(app)
+    mission = backlog.list()[0]
+
+    status, _ = app.post(f"/missions/{mission.id}/ready", {})
+
+    assert status == 303
+    assert backlog.get(mission.id).status is MissionStatus.READY
+
+
+def test_marking_an_incomplete_mission_ready_is_refused(tmp_path):
+    app, backlog, _ = build(tmp_path)
+    add(app, criteria="")
+    mission = backlog.list()[0]
+
+    status, body = app.post(f"/missions/{mission.id}/ready", {})
+
+    assert status == 400
+    assert "success criterion" in body
+
+
+def test_deleting_asks_first(tmp_path):
+    app, backlog, _ = build(tmp_path)
+    add(app)
+    mission = backlog.list()[0]
+
+    status, body = app.get(f"/missions/{mission.id}/delete", {})
+
+    assert status == 200
+    assert "cannot be undone" in body
+    assert backlog.list() != []
+
+
+def test_the_delete_confirmation_warns_about_a_launched_mission(tmp_path):
+    app, backlog, _ = build(tmp_path)
+    add(app, methodology="test-two-stage")
+    mission = backlog.list()[0]
+    app.post(f"/missions/{mission.id}/launch", {"methodology": [""]})
+
+    _, body = app.get(f"/missions/{mission.id}/delete", {})
+
+    assert "orphans that engagement" in body
+
+
+# ------------------------------------------------------------- downloads
+
+
+def test_a_deliverable_can_be_downloaded_as_a_file(tmp_path):
+    from interfaces.web.server import Download
+
+    app, backlog, _ = build(tmp_path)
+    add(app, methodology="test-two-stage")
+    mission = backlog.list()[0]
+    app.post(f"/missions/{mission.id}/launch", {"methodology": [""]})
+    project_id = backlog.get(mission.id).project_id
+
+    status, body = app.get(
+        f"/engagement/{project_id}/deliverable/requirements/raw", {}
+    )
+
+    assert status == 200
+    assert isinstance(body, Download)
+    assert body.filename == "requirements-v1.md"
+    assert "Juniors must run an intake workshop." in body.content
+
+
+def test_downloading_an_unknown_version_is_a_404(tmp_path):
+    app, backlog, _ = build(tmp_path)
+    add(app, methodology="test-two-stage")
+    mission = backlog.list()[0]
+    app.post(f"/missions/{mission.id}/launch", {"methodology": [""]})
+    project_id = backlog.get(mission.id).project_id
+
+    status, _ = app.get(
+        f"/engagement/{project_id}/deliverable/requirements/raw",
+        {"version": ["99"]},
+    )
+
+    assert status == 404
+
+
+def test_the_engagement_links_back_to_its_mission(tmp_path):
+    app, backlog, _ = build(tmp_path)
+    add(app, methodology="test-two-stage")
+    mission = backlog.list()[0]
+    app.post(f"/missions/{mission.id}/launch", {"methodology": [""]})
+    project_id = backlog.get(mission.id).project_id
+
+    _, body = app.get(f"/engagement/{project_id}", {})
+
+    assert f"/missions/{mission.id}" in body
 
 
 # --------------------------------------------------------- methodologies

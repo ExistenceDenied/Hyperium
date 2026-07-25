@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import re
 import threading
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
@@ -25,6 +26,15 @@ from interfaces.web import backlog_pages, methodology_pages, pages
 from interfaces.web.layout import error_page
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class Download:
+    """A response that is a file rather than a page."""
+
+    content: str
+    filename: str
+    media_type: str = "text/markdown; charset=utf-8"
 
 # Errors that are the caller's fault rather than a bug: shown, not raised.
 EXPECTED = (ValueError, KeyError, FileNotFoundError, RuntimeError)
@@ -80,18 +90,18 @@ def _lines(value: str) -> list[str]:
     return [line.strip() for line in (value or "").splitlines() if line.strip()]
 
 
-def _constraints(value: str) -> list[tuple[str, str]]:
+def _pairs(value: str, label: str) -> list[tuple[str, str]]:
     pairs = []
 
     for line in _lines(value):
-        kind, separator, description = line.partition(":")
+        left, separator, right = line.partition(":")
 
-        if not separator:
+        if not separator or not left.strip() or not right.strip():
             raise ValueError(
-                f"Constraint '{line}' must be written as 'TYPE: description'."
+                f"{label} '{line}' must be written as 'name: value'."
             )
 
-        pairs.append((kind.strip(), description.strip()))
+        pairs.append((left.strip(), right.strip()))
 
     return pairs
 
@@ -127,6 +137,10 @@ class ReviewApp:
                 re.compile(r"^/missions/(?P<key>[0-9a-f-]{36})/edit$"),
                 self._edit_mission,
             ),
+            (
+                re.compile(r"^/missions/(?P<key>[0-9a-f-]{36})/delete$"),
+                self._confirm_delete,
+            ),
             (re.compile(r"^/methodologies$"), self._methodologies_page),
             (
                 re.compile(r"^/methodologies/(?P<key>[\w-]+)$"),
@@ -150,6 +164,13 @@ class ReviewApp:
                 ),
                 self._diff,
             ),
+            (
+                re.compile(
+                    r"^/engagement/(?P<key>[0-9a-f-]{36})"
+                    r"/deliverable/(?P<name>[\w-]+)/raw$"
+                ),
+                self._raw,
+            ),
         ]
 
         self._post_routes = [
@@ -169,6 +190,10 @@ class ReviewApp:
             (
                 re.compile(r"^/missions/(?P<key>[0-9a-f-]{36})/restore$"),
                 self._restore,
+            ),
+            (
+                re.compile(r"^/missions/(?P<key>[0-9a-f-]{36})/ready$"),
+                self._mark_ready,
             ),
             (
                 re.compile(r"^/missions/(?P<key>[0-9a-f-]{36})/delete$"),
@@ -336,12 +361,68 @@ class ReviewApp:
         backlog = self._require_backlog()
         mission = backlog.get(UUID(key))
 
+        project = None
+        project_error = ""
+
+        if mission.project_id:
+            try:
+                project = self._projects.load(mission.project_id)
+            except Exception as error:
+                # Say so, rather than showing a mission with no deliverables.
+                project_error = str(error)
+
         return 200, backlog_pages.mission_detail(
             mission,
             self._catalogue(),
+            project=project,
             launching=self._runner.busy(mission.id),
             error=self._runner.error(mission.id),
+            project_error=project_error,
         )
+
+    def _confirm_delete(self, query, key):
+        backlog = self._require_backlog()
+
+        return 200, backlog_pages.confirm_delete(backlog.get(UUID(key)))
+
+    def _mark_ready(self, form, key):
+        backlog = self._require_backlog()
+        backlog.mark_ready(UUID(key))
+
+        return 303, f"/missions/{key}"
+
+    def _raw(self, query, key, name):
+        """The deliverable as its own file, which is what a client receives."""
+        project = self._projects.load(UUID(key))
+
+        try:
+            deliverable = project.deliverable(name)
+        except UnknownDeliverableError as error:
+            return 404, error_page(str(error))
+
+        requested = query.get("version")
+        version = deliverable.latest_version()
+
+        if requested:
+            matches = [
+                item
+                for item in deliverable.versions
+                if item.version == int(requested[0])
+            ]
+
+            if not matches:
+                return 404, error_page(
+                    f"No version {requested[0]} of '{deliverable.key}'."
+                )
+
+            version = matches[0]
+
+        if version is None:
+            return 404, error_page(
+                f"'{deliverable.key}' has no content to download yet."
+            )
+
+        return 200, Download(version.content, version.filename)
 
     def _new_mission(self, query):
         self._require_backlog()
@@ -366,6 +447,7 @@ class ReviewApp:
                 "constraints",
                 "priority",
                 "methodology",
+                "stakeholders",
             )
         }
 
@@ -379,7 +461,8 @@ class ReviewApp:
                 objective=values["objective"],
                 priority=MissionPriority.parse(values["priority"] or "medium"),
                 criteria=_lines(values["criteria"]),
-                constraints=_constraints(values["constraints"]),
+                constraints=_pairs(values["constraints"], "Constraint"),
+                stakeholders=_pairs(values["stakeholders"], "Stakeholder"),
                 methodology=values["methodology"] or None,
             )
         except ValueError as error:
@@ -406,7 +489,12 @@ class ReviewApp:
                 clear_criteria=True,
                 add_criteria=_lines(values["criteria"]),
                 clear_constraints=True,
-                add_constraints=_constraints(values["constraints"]),
+                add_constraints=_pairs(values["constraints"], "Constraint"),
+                clear_stakeholders=True,
+                add_stakeholders=_pairs(
+                    values["stakeholders"], "Stakeholder"
+                ),
+                methodology=values["methodology"],
             )
         except ValueError as error:
             return 400, backlog_pages.mission_form(
@@ -529,6 +617,21 @@ def build_handler(app: ReviewApp):
                 self.send_response(303)
                 self.send_header("Location", body)
                 self.end_headers()
+                return
+
+            if isinstance(body, Download):
+                payload = body.content.encode("utf-8")
+
+                self.send_response(status)
+                self.send_header("Content-Type", body.media_type)
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header(
+                    "Content-Disposition",
+                    f'attachment; filename="{body.filename}"',
+                )
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(payload)
                 return
 
             payload = body.encode("utf-8")

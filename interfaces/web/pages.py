@@ -110,6 +110,7 @@ def engagement(project: Project, busy: bool = False, error: str = "") -> str:
     status = result.status if result else None
 
     body = [
+        f"<p><a href='/missions/{project.mission.id}'>&larr; Mission</a></p>",
         f"<h1>{esc(project.mission.title)}</h1>",
         f"<p class='muted'>{esc(project.mission.objective.description)}</p>",
         f"<p><span class='pill'>{esc(status.value if status else '—')}</span> "
@@ -325,6 +326,13 @@ def deliverable_view(
         f"{len(versions)} · {esc(selected.filename)} · by "
         f"{esc(selected.created_by or 'unknown')}</span></p>",
     ]
+
+    base = f"/engagement/{project.id}/deliverable/{esc(deliverable.key)}"
+    body.append(
+        f"<div class='actions'><a class='btn' href='{base}/raw"
+        f"?version={selected.version}'>Download {esc(selected.filename)}</a>"
+        "</div>"
+    )
 
     if len(versions) > 1:
         links = " ".join(

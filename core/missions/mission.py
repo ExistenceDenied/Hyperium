@@ -84,6 +84,10 @@ class Mission:
         self.constraints.clear()
         self.touch()
 
+    def clear_stakeholders(self) -> None:
+        self.stakeholders.clear()
+        self.touch()
+
     # ---------------------------------------------------------- lifecycle
 
     def touch(self) -> None:

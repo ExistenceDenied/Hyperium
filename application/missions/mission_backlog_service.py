@@ -104,6 +104,8 @@ class MissionBacklogService:
         clear_criteria: bool = False,
         add_constraints: list[tuple[str, str]] | None = None,
         clear_constraints: bool = False,
+        add_stakeholders: list[tuple[str, str]] | None = None,
+        clear_stakeholders: bool = False,
         methodology: str | None = None,
     ) -> Mission:
         mission = self._repository.get(mission_id)
@@ -116,6 +118,8 @@ class MissionBacklogService:
                 clear_criteria,
                 add_constraints,
                 clear_constraints,
+                add_stakeholders,
+                clear_stakeholders,
             ]
         )
 
@@ -163,6 +167,12 @@ class MissionBacklogService:
                     description=description,
                 )
             )
+
+        if clear_stakeholders:
+            mission.clear_stakeholders()
+
+        for name, role in add_stakeholders or []:
+            mission.add_stakeholder(Stakeholder(name=name, role=role))
 
         self._repository.save(mission)
 

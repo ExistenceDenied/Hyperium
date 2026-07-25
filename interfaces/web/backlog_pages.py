@@ -8,6 +8,7 @@ choose what to show.
 
 from __future__ import annotations
 
+from core.execution.deliverable_status import DeliverableStatus
 from core.missions.mission_priority import MissionPriority
 from core.missions.mission_status import MissionStatus
 from interfaces.web.layout import esc, page
@@ -17,6 +18,13 @@ _STATUS_CLASS = {
     MissionStatus.READY: "ok",
     MissionStatus.LAUNCHED: "await",
     MissionStatus.ARCHIVED: "draft",
+}
+
+_DELIVERABLE_CLASS = {
+    DeliverableStatus.AWAITING_APPROVAL: "await",
+    DeliverableStatus.APPROVED: "ok",
+    DeliverableStatus.CHANGES_REQUESTED: "bad",
+    DeliverableStatus.DRAFT: "draft",
 }
 
 
@@ -54,14 +62,9 @@ def backlog(missions, show_archived: bool = False, launching=()) -> str:
             if mission.is_complete
             else " <span class='muted small'>(needs a success criterion)</span>"
         )
-        busy = mission.id in launching
 
-        if busy:
+        if mission.id in launching:
             action = "<span class='muted small'>launching…</span>"
-        elif mission.is_launched:
-            action = (
-                f"<a href='/engagement/{mission.project_id}'>Engagement →</a>"
-            )
         else:
             action = f"<a href='/missions/{mission.id}'>Open</a>"
 
@@ -75,33 +78,42 @@ def backlog(missions, show_archived: bool = False, launching=()) -> str:
         )
 
     body.append("</tbody></table>")
-
     body.append(
-        f"<p class='small'><a href='/missions?all={'0' if show_archived else '1'}'>"
+        f"<p class='small'><a href='/missions?all="
+        f"{'0' if show_archived else '1'}'>"
         f"{'Hide' if show_archived else 'Show'} archived</a></p>"
     )
 
-    return page("Backlog", "".join(body), refresh=bool(launching), section="backlog")
+    return page(
+        "Backlog", "".join(body), refresh=bool(launching), section="backlog"
+    )
 
 
 def mission_detail(
     mission,
     methodologies,
+    project=None,
     launching: bool = False,
     error: str = "",
+    project_error: str = "",
 ) -> str:
     body = [
         "<p><a href='/missions'>← Backlog</a></p>",
         f"<h1>{esc(mission.title)}</h1>",
         f"<p>{status_pill(mission)} "
         f"<span class='pill'>{esc(mission.priority.name)}</span> "
-        f"<span class='muted small'>{esc(mission.id)}</span></p>",
+        + (
+            f"<span class='pill'>{esc(mission.methodology)}</span> "
+            if mission.methodology
+            else ""
+        )
+        + f"<span class='muted small'>{esc(mission.id)}</span></p>",
         f"<div class='card'><p>{esc(mission.objective.description)}</p></div>",
     ]
 
     if error:
         body.append(
-            f"<div class='banner bad'><strong>Could not launch.</strong><br>"
+            "<div class='banner bad'><strong>Could not launch.</strong><br>"
             f"{esc(error)}</div>"
         )
 
@@ -114,24 +126,116 @@ def mission_detail(
     body.append(_facts(mission))
 
     if mission.is_launched:
-        body.append(
-            "<div class='actions'>"
-            f"<a class='btn primary' href='/engagement/{mission.project_id}'>"
-            "Open the engagement</a></div>"
-            "<p class='muted small'>A launched mission is frozen: the "
-            "engagement holds its own copy, and editing this would let the "
-            "two drift apart.</p>"
-        )
+        body.append(_engagement_summary(mission, project, project_error))
     elif not launching:
         body.append(_launch_form(mission, methodologies))
-        body.append(_manage_form(mission))
+
+    if not launching:
+        body.append(_manage(mission))
 
     return page(
-        mission.title,
-        "".join(body),
-        refresh=launching,
-        section="backlog",
+        mission.title, "".join(body), refresh=launching, section="backlog"
     )
+
+
+def _engagement_summary(mission, project, project_error: str) -> str:
+    """
+    The deliverables, shown on the mission itself.
+
+    A mission is what someone thinks in terms of; making them navigate to a
+    separate engagement to find out what it produced is the wrong shape.
+    """
+    if project_error:
+        return (
+            "<div class='banner bad'><strong>The engagement could not be "
+            f"read.</strong><br>{esc(project_error)}</div>"
+        )
+
+    if project is None:
+        return (
+            f"<p class='muted'>Launched as engagement "
+            f"<code>{esc(mission.project_id)}</code>.</p>"
+        )
+
+    result = project.execution_result
+    plan = project.execution_plan
+    status = result.status.value if result else "—"
+
+    blocks = [
+        "<h2>Deliverables</h2>",
+        f"<p><span class='pill'>{esc(status)}</span> "
+        f"<a class='small' href='/engagement/{project.id}'>"
+        "Open the full engagement →</a></p>",
+    ]
+
+    if not project.deliverables:
+        blocks.append("<p class='muted'>Nothing produced yet.</p>")
+        return "".join(blocks)
+
+    current = object()
+
+    for deliverable in project.deliverables:
+        if deliverable.stage != current:
+            current = deliverable.stage
+            blocks.append(_stage_line(plan, current))
+
+        version = deliverable.latest_version()
+        css = _DELIVERABLE_CLASS.get(deliverable.status, "draft")
+        pill = (
+            f"<span class='pill {css}'>"
+            f"{esc(deliverable.status.value.replace('_', ' '))}</span>"
+        )
+
+        if version is None:
+            detail = "<span class='muted small'>not produced yet</span>"
+            links = ""
+        else:
+            detail = (
+                f"<span class='muted small'>v{version.version} · "
+                f"{esc(version.filename)}</span>"
+            )
+            base = f"/engagement/{project.id}/deliverable/{esc(deliverable.key)}"
+            links = (
+                f"<div class='actions'><a class='btn' href='{base}'>Read</a>"
+                f"<a class='btn' href='{base}/raw'>Download</a>"
+                + (
+                    f"<a class='btn' href='{base}/diff'>Compare versions</a>"
+                    if len(deliverable.versions) > 1
+                    else ""
+                )
+                + "</div>"
+            )
+
+        blocks.append(
+            "<div class='card'><div class='row'><div>"
+            f"<strong>{esc(deliverable.name)}</strong><br>{detail}</div>"
+            f"<div>{pill}</div></div>{links}</div>"
+        )
+
+    return "".join(blocks)
+
+
+def _stage_line(plan, stage_key) -> str:
+    if not stage_key or plan is None:
+        return ""
+
+    gate = plan.gate_result(stage_key)
+    stage = plan.stage(stage_key)
+    name = stage.name if stage and stage.name else stage_key
+
+    badge = (
+        "<span class='pill ok'>gate passed</span>"
+        if gate.passed
+        else "<span class='pill await'>gate not met</span>"
+    )
+
+    heading = f"<h3>{esc(name)} {badge}</h3>"
+
+    if not gate.passed and gate.failures:
+        items = "".join(f"<li>{esc(f)}</li>" for f in gate.failures)
+        heading += f"<ul class='muted small'>{items}</ul>"
+
+    return heading
 
 
 def _facts(mission) -> str:
@@ -152,7 +256,7 @@ def _facts(mission) -> str:
     if not mission.is_complete:
         blocks.append(
             "<div class='banner'>This mission has no success criterion, so it "
-            "cannot be launched yet. Add one below.</div>"
+            "cannot be launched yet. Edit it to add one.</div>"
         )
 
     return "".join(blocks)
@@ -179,24 +283,75 @@ def _launch_form(mission, methodologies) -> str:
         f"<select name='methodology'>{''.join(options)}</select>"
         "<div class='actions'>"
         f"<button class='primary' type='submit'{disabled}>Launch engagement"
-        "</button></div>"
-        "</form>"
+        "</button></div></form>"
     )
 
 
-def _manage_form(mission) -> str:
-    archive = (
-        "restore" if mission.status is MissionStatus.ARCHIVED else "archive"
+def _manage(mission) -> str:
+    actions = []
+
+    if mission.is_editable:
+        actions.append(
+            f"<a class='btn' href='/missions/{mission.id}/edit'>Edit</a>"
+        )
+
+    if mission.status is MissionStatus.DRAFT and mission.is_complete:
+        actions.append(
+            f"<form method='post' action='/missions/{mission.id}/ready'>"
+            "<button type='submit'>Mark ready</button></form>"
+        )
+
+    if mission.status is MissionStatus.ARCHIVED:
+        actions.append(
+            f"<form method='post' action='/missions/{mission.id}/restore'>"
+            "<button type='submit'>Restore</button></form>"
+        )
+    elif not mission.is_launched:
+        actions.append(
+            f"<form method='post' action='/missions/{mission.id}/archive'>"
+            "<button type='submit'>Archive</button></form>"
+        )
+
+    actions.append(
+        f"<a class='btn danger' href='/missions/{mission.id}/delete'>Delete</a>"
     )
 
-    return (
-        "<h2>Manage</h2><div class='actions'>"
-        f"<a class='btn' href='/missions/{mission.id}/edit'>Edit</a>"
-        f"<form method='post' action='/missions/{mission.id}/{archive}'>"
-        f"<button type='submit'>{archive.title()}</button></form>"
+    note = (
+        "<p class='muted small'>A launched mission is frozen: the engagement "
+        "holds its own copy, and editing this would let the two drift "
+        "apart.</p>"
+        if mission.is_launched
+        else ""
+    )
+
+    return f"<h2>Manage</h2><div class='actions'>{''.join(actions)}</div>{note}"
+
+
+def confirm_delete(mission) -> str:
+    """
+    Deleting is irreversible, and there is no scripting on these pages, so the
+    confirmation is a page rather than a dialog.
+    """
+    warning = (
+        "<div class='banner bad'>This mission has been launched as engagement "
+        f"<code>{esc(mission.project_id)}</code>. Deleting it orphans that "
+        "engagement — the work stays on disk but nothing points at it.</div>"
+        if mission.is_launched
+        else ""
+    )
+
+    return page(
+        "Delete mission",
+        f"<p><a href='/missions/{mission.id}'>← {esc(mission.title)}</a></p>"
+        f"<h1>Delete “{esc(mission.title)}”?</h1>{warning}"
+        "<p class='muted'>This cannot be undone. Archiving keeps the mission "
+        "and hides it from the backlog.</p>"
         f"<form method='post' action='/missions/{mission.id}/delete'>"
-        "<button class='danger' type='submit'>Delete</button></form>"
-        "</div>"
+        "<div class='actions'>"
+        "<button class='danger' type='submit'>Delete permanently</button>"
+        f"<a class='btn' href='/missions/{mission.id}'>Cancel</a>"
+        "</div></form>",
+        section="backlog",
     )
 
 
@@ -211,9 +366,7 @@ def mission_form(
     values = values or {}
 
     def value(name, fallback=""):
-        if name in values:
-            return values[name]
-        return fallback
+        return values.get(name, fallback)
 
     title = value("title", mission.title if editing else "")
     objective = value(
@@ -231,10 +384,14 @@ def mission_form(
         if editing
         else "",
     )
-    chosen = value("methodology", mission.methodology if editing else "")
-    priority = value(
-        "priority", mission.priority.name if editing else "MEDIUM"
+    stakeholders = value(
+        "stakeholders",
+        "\n".join(f"{s.name}: {s.role}" for s in mission.stakeholders)
+        if editing
+        else "",
     )
+    chosen = value("methodology", mission.methodology if editing else "")
+    priority = value("priority", mission.priority.name if editing else "MEDIUM")
 
     action = f"/missions/{mission.id}/edit" if editing else "/missions"
 
@@ -253,13 +410,12 @@ def mission_form(
             f"{esc(item.name)}</option>"
         )
 
-    banner = (
-        f"<div class='banner bad'>{esc(error)}</div>" if error else ""
-    )
+    banner = f"<div class='banner bad'>{esc(error)}</div>" if error else ""
 
     return page(
         "Edit mission" if editing else "New mission",
-        f"<p><a href='/missions'>← Backlog</a></p>"
+        f"<p><a href='/missions"
+        f"{'/' + str(mission.id) if editing else ''}'>← Back</a></p>"
         f"<h1>{'Edit mission' if editing else 'New mission'}</h1>"
         f"{banner}"
         f"<form method='post' action='{action}'>"
@@ -282,8 +438,11 @@ def mission_form(
         "<code>TYPE: description</code>, e.g. <code>TIME: must ship in Q3</code>"
         "</span></label>"
         f"<textarea name='constraints' rows='3'>{esc(constraints)}</textarea>"
+        "<label>Stakeholders <span class='hint'>— one per line, as "
+        "<code>Name: role</code></span></label>"
+        f"<textarea name='stakeholders' rows='3'>{esc(stakeholders)}</textarea>"
         "<div class='actions'>"
-        f"<button class='primary' type='submit'>"
+        "<button class='primary' type='submit'>"
         f"{'Save changes' if editing else 'Add to backlog'}</button>"
         f"<a class='btn' href='/missions"
         f"{'/' + str(mission.id) if editing else ''}'>Cancel</a>"
