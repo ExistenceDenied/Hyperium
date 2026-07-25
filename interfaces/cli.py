@@ -394,18 +394,29 @@ AGENT_SYSTEM = (
 
 def command_do(args, settings: Settings) -> int:
     """
-    Hand the agent a task; it uses read-only tools and reports the result.
+    Hand the agent a task; it uses tools and reports the result.
 
-    This is the direct-task path: no mission, methodology or approval gate.
-    The tools available today are read-only, so the run is safe to execute
-    unattended.
+    This is the direct-task path: no mission or methodology. By default the
+    tools are read-only and the run is safe unattended. With --allow-writes the
+    agent may also change the filesystem, and every such action is held at the
+    approval gate — interactively by default, or auto-approved for a trusted
+    unattended run.
     """
     from application.agent.agent_runner import AgentRunner
+    from application.agent.approval_policies import AutoApproveApprover
     from core.agents.agent_result import StopReason
     from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
-    from infrastructure.tools import read_only_tools
+    from infrastructure.tools import read_only_tools, writable_tools
+    from interfaces.approval import ConsoleApprover
 
     root = Path(args.root).resolve()
+
+    if args.allow_writes:
+        tools = writable_tools(root)
+        approver = AutoApproveApprover() if args.auto_approve else ConsoleApprover()
+    else:
+        tools = read_only_tools(root)
+        approver = None
 
     runner = AgentRunner(
         OllamaAgentProvider(
@@ -413,8 +424,9 @@ def command_do(args, settings: Settings) -> int:
             timeout_seconds=settings.llm_timeout_seconds,
             temperature=settings.temperature,
         ),
-        read_only_tools(root),
+        tools,
         max_iterations=args.max_steps,
+        approver=approver,
     )
 
     result = runner.run(args.task, system=AGENT_SYSTEM)
@@ -667,6 +679,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=12,
         dest="max_steps",
         help="Maximum tool-using steps before the run is cut short.",
+    )
+    do.add_argument(
+        "--allow-writes",
+        action="store_true",
+        dest="allow_writes",
+        help="Let the agent change files. Each write is held for approval.",
+    )
+    do.add_argument(
+        "--auto-approve",
+        action="store_true",
+        dest="auto_approve",
+        help="Approve every action without asking. Unattended runs only.",
     )
     do.add_argument(
         "--verbose",

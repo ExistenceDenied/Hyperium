@@ -3,6 +3,7 @@ from __future__ import annotations
 from infrastructure.tools.list_directory_tool import ListDirectoryTool
 from infrastructure.tools.read_file_tool import ReadFileTool
 from infrastructure.tools.web_fetch_tool import WebFetchTool
+from infrastructure.tools.write_file_tool import WriteFileTool
 
 
 def test_read_file_reads_within_root(tmp_path):
@@ -45,6 +46,41 @@ def test_web_fetch_rejects_non_http_urls():
     tool = WebFetchTool()
 
     assert "only http and https" in tool.invoke({"url": "file:///etc/passwd"})
+
+
+def test_write_file_creates_a_file_within_root(tmp_path):
+    tool = WriteFileTool(tmp_path)
+
+    result = tool.invoke({"path": "out/report.md", "content": "hello"})
+
+    assert (tmp_path / "out" / "report.md").read_text(encoding="utf-8") == "hello"
+    assert "Wrote 5 characters" in result
+
+
+def test_write_file_refuses_to_escape_root(tmp_path):
+    root = tmp_path / "root"
+    root.mkdir()
+    tool = WriteFileTool(root)
+
+    result = tool.invoke({"path": "../escape.txt", "content": "x"})
+
+    assert "outside the permitted directory" in result
+    assert not (tmp_path / "escape.txt").exists()
+
+
+def test_write_file_requires_approval_and_previews_the_effect(tmp_path):
+    tool = WriteFileTool(tmp_path)
+
+    assert tool.requires_approval is True
+    preview = tool.preview({"path": "notes.txt", "content": "abcd"})
+    assert "Create" in preview
+    assert "notes.txt" in preview
+
+
+def test_read_only_tools_do_not_require_approval(tmp_path):
+    assert ReadFileTool(tmp_path).requires_approval is False
+    assert ListDirectoryTool(tmp_path).requires_approval is False
+    assert WebFetchTool().requires_approval is False
 
 
 def test_a_tool_advertises_a_function_schema(tmp_path):

@@ -3,9 +3,13 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, Sequence
 
+from application.agent.approval_policies import AutoDenyApprover
 from core.agents.agent_result import AgentResult, AgentStep, StopReason
 from core.agents.agent_turn import AgentTurn
+from core.agents.approval import ActionRequest
+from core.agents.tool_call import ToolCall
 from core.interfaces.agent_provider import AgentProvider
+from core.interfaces.approver import Approver
 from core.tools.tool import Tool
 
 logger = logging.getLogger(__name__)
@@ -28,10 +32,14 @@ class AgentRunner:
         provider: AgentProvider,
         tools: Sequence[Tool],
         max_iterations: int = DEFAULT_MAX_ITERATIONS,
+        approver: Approver | None = None,
     ) -> None:
         self._provider = provider
         self._tools: Mapping[str, Tool] = {tool.name: tool for tool in tools}
         self._max_iterations = max_iterations
+        # Deny by default: a runner given side-effecting tools but no approver
+        # must not silently act. The caller opts into acting by passing one.
+        self._approver = approver or AutoDenyApprover()
 
     def run(self, task: str, system: str | None = None) -> AgentResult:
         messages: list[dict] = []
@@ -57,7 +65,7 @@ class AgentRunner:
             messages.append(self._assistant_message(turn))
 
             for call in turn.tool_calls:
-                result = self._invoke(call.name, call.arguments)
+                result = self._perform(call)
                 steps.append(
                     AgentStep(
                         tool=call.name,
@@ -88,21 +96,41 @@ class AgentRunner:
             ],
         }
 
-    def _invoke(self, name: str, arguments: dict) -> str:
-        tool = self._tools.get(name)
+    def _perform(self, call: ToolCall) -> str:
+        tool = self._tools.get(call.name)
 
         if tool is None:
             # Handed back to the model rather than raised: the model chose the
             # name, and telling it the tool does not exist lets it recover.
-            return f"Error: no tool named '{name}' is available."
+            return f"Error: no tool named '{call.name}' is available."
 
+        if tool.requires_approval:
+            decision = self._approver.review(
+                ActionRequest(
+                    tool=call.name,
+                    arguments=call.arguments,
+                    preview=tool.preview(call.arguments),
+                )
+            )
+
+            if not decision.approved:
+                reason = decision.reason or "not approved"
+                logger.info("Tool '%s' denied: %s", call.name, reason)
+                return (
+                    f"Denied by the operator: {reason}. "
+                    "The action was not performed; try another approach."
+                )
+
+        return self._invoke(tool, call.arguments)
+
+    def _invoke(self, tool: Tool, arguments: dict) -> str:
         try:
             return tool.invoke(arguments)
         except Exception as error:
             # A tool failure is information for the model, not a crash for the
             # run. It is logged in full and summarised back into the loop.
-            logger.exception("Tool '%s' raised.", name)
-            return f"Error: tool '{name}' failed: {error}"
+            logger.exception("Tool '%s' raised.", tool.name)
+            return f"Error: tool '{tool.name}' failed: {error}"
 
     def _exhausted_message(self) -> str:
         return (
