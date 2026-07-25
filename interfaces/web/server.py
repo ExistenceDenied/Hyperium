@@ -1,9 +1,10 @@
 """
-A local review server.
+A local web interface for the whole engagement lifecycle.
 
 This is an adapter, not a layer of its own: every decision is delegated to
-ProjectService and the domain. It exists because reviewing a generated
-document in a terminal is the weakest part of the human loop.
+`ProjectService` and `MissionBacklogService`. The CLI calls the same services,
+so the two interfaces cannot drift apart on what anything means — which they
+did, once, on approval.
 
 Built on the standard library so that a review tool does not add a web
 framework to a project whose only runtime dependency is an LLM client.
@@ -12,24 +13,30 @@ framework to a project whose only runtime dependency is an LLM client.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
+from core.missions.mission_priority import MissionPriority
 from core.project.project import UnknownDeliverableError
-from interfaces.web import pages
+from interfaces.web import backlog_pages, methodology_pages, pages
+from interfaces.web.layout import error_page
 
 logger = logging.getLogger(__name__)
 
+# Errors that are the caller's fault rather than a bug: shown, not raised.
+EXPECTED = (ValueError, KeyError, FileNotFoundError, RuntimeError)
 
-class EngagementRunner:
+
+class BackgroundWork:
     """
-    Runs the engine off the request thread.
+    Runs long work off the request thread, keyed by whatever it belongs to.
 
-    A resume can take minutes against a real model. Blocking the browser for
-    that long looks like a hang, so the work happens in the background and the
-    page reports progress instead.
+    Planning and executing an engagement takes minutes against a real model.
+    Holding a request open for that long looks like a hang, so the work runs
+    in the background and the page reports progress.
     """
 
     def __init__(self) -> None:
@@ -37,35 +44,56 @@ class EngagementRunner:
         self._errors: dict[UUID, str] = {}
         self._lock = threading.Lock()
 
-    def busy(self, project_id: UUID) -> bool:
-        thread = self._threads.get(project_id)
+    def busy(self, key: UUID) -> bool:
+        thread = self._threads.get(key)
 
         return thread is not None and thread.is_alive()
 
-    def error(self, project_id: UUID) -> str:
-        return self._errors.get(project_id, "")
+    def running(self) -> set[UUID]:
+        return {key for key in self._threads if self.busy(key)}
 
-    def start(self, project_id: UUID, work) -> None:
+    def error(self, key: UUID) -> str:
+        return self._errors.get(key, "")
+
+    def start(self, key: UUID, work) -> None:
         with self._lock:
-            if self.busy(project_id):
+            if self.busy(key):
                 return
 
-            self._errors.pop(project_id, None)
+            self._errors.pop(key, None)
 
             thread = threading.Thread(
-                target=self._run,
-                args=(project_id, work),
-                daemon=True,
+                target=self._run, args=(key, work), daemon=True
             )
-            self._threads[project_id] = thread
+            self._threads[key] = thread
             thread.start()
 
-    def _run(self, project_id: UUID, work) -> None:
+    def _run(self, key: UUID, work) -> None:
         try:
             work()
-        except Exception as error:  # surfaced on the page, not swallowed
-            logger.exception("Engagement %s failed.", project_id)
-            self._errors[project_id] = str(error)
+        except Exception as error:  # surfaced on the page, never swallowed
+            logger.exception("Background work for %s failed.", key)
+            self._errors[key] = str(error)
+
+
+def _lines(value: str) -> list[str]:
+    return [line.strip() for line in (value or "").splitlines() if line.strip()]
+
+
+def _constraints(value: str) -> list[tuple[str, str]]:
+    pairs = []
+
+    for line in _lines(value):
+        kind, separator, description = line.partition(":")
+
+        if not separator:
+            raise ValueError(
+                f"Constraint '{line}' must be written as 'TYPE: description'."
+            )
+
+        pairs.append((kind.strip(), description.strip()))
+
+    return pairs
 
 
 class ReviewApp:
@@ -74,64 +102,121 @@ class ReviewApp:
     can be exercised directly in tests.
     """
 
-    def __init__(self, service, projects, missions=None, runner=None) -> None:
+    def __init__(
+        self,
+        service,
+        projects,
+        missions=None,
+        methodologies=None,
+        runner=None,
+        resources=None,
+    ) -> None:
         self._service = service
         self._projects = projects
         self._missions = missions
-        self._runner = runner or EngagementRunner()
+        self._methodologies = methodologies
+        self._runner = runner or BackgroundWork()
+        self._resources = resources or (lambda: [])
+
+        self._get_routes = [
+            (re.compile(r"^/$"), self._engagements),
+            (re.compile(r"^/missions$"), self._backlog),
+            (re.compile(r"^/missions/new$"), self._new_mission),
+            (re.compile(r"^/missions/(?P<key>[0-9a-f-]{36})$"), self._mission),
+            (
+                re.compile(r"^/missions/(?P<key>[0-9a-f-]{36})/edit$"),
+                self._edit_mission,
+            ),
+            (re.compile(r"^/methodologies$"), self._methodologies_page),
+            (
+                re.compile(r"^/methodologies/(?P<key>[\w-]+)$"),
+                self._methodology,
+            ),
+            (
+                re.compile(r"^/engagement/(?P<key>[0-9a-f-]{36})$"),
+                self._engagement,
+            ),
+            (
+                re.compile(
+                    r"^/engagement/(?P<key>[0-9a-f-]{36})"
+                    r"/deliverable/(?P<name>[\w-]+)$"
+                ),
+                self._deliverable,
+            ),
+            (
+                re.compile(
+                    r"^/engagement/(?P<key>[0-9a-f-]{36})"
+                    r"/deliverable/(?P<name>[\w-]+)/diff$"
+                ),
+                self._diff,
+            ),
+        ]
+
+        self._post_routes = [
+            (re.compile(r"^/missions$"), self._create_mission),
+            (
+                re.compile(r"^/missions/(?P<key>[0-9a-f-]{36})/edit$"),
+                self._update_mission,
+            ),
+            (
+                re.compile(r"^/missions/(?P<key>[0-9a-f-]{36})/launch$"),
+                self._launch,
+            ),
+            (
+                re.compile(r"^/missions/(?P<key>[0-9a-f-]{36})/archive$"),
+                self._archive,
+            ),
+            (
+                re.compile(r"^/missions/(?P<key>[0-9a-f-]{36})/restore$"),
+                self._restore,
+            ),
+            (
+                re.compile(r"^/missions/(?P<key>[0-9a-f-]{36})/delete$"),
+                self._delete,
+            ),
+            (
+                re.compile(r"^/engagement/(?P<key>[0-9a-f-]{36})/resume$"),
+                self._resume,
+            ),
+            (
+                re.compile(
+                    r"^/engagement/(?P<key>[0-9a-f-]{36})"
+                    r"/deliverable/(?P<name>[\w-]+)/review$"
+                ),
+                self._review,
+            ),
+            (
+                re.compile(
+                    r"^/engagement/(?P<key>[0-9a-f-]{36})"
+                    r"/activity/(?P<name>[\w-]+)/submit$"
+                ),
+                self._submit,
+            ),
+        ]
 
     # ------------------------------------------------------------- routing
 
     def get(self, path: str, query: dict) -> tuple[int, str]:
-        parts = [p for p in path.strip("/").split("/") if p]
-
-        try:
-            if not parts:
-                return 200, self._index()
-
-            if parts[0] != "engagement" or len(parts) < 2:
-                return 404, pages.error_page(f"Unknown path '{path}'.")
-
-            project = self._projects.load(UUID(parts[1]))
-
-            if len(parts) == 2:
-                return 200, pages.engagement(
-                    project,
-                    busy=self._runner.busy(project.id),
-                    error=self._runner.error(project.id),
-                )
-
-            if len(parts) >= 4 and parts[2] == "deliverable":
-                return self._deliverable(project, parts, query)
-
-            return 404, pages.error_page(f"Unknown path '{path}'.")
-
-        except (ValueError, KeyError, FileNotFoundError) as error:
-            return 404, pages.error_page(str(error))
+        return self._dispatch(self._get_routes, path, query, code=404)
 
     def post(self, path: str, form: dict) -> tuple[int, str]:
-        parts = [p for p in path.strip("/").split("/") if p]
+        return self._dispatch(self._post_routes, path, form, code=400)
 
-        try:
-            if len(parts) < 3 or parts[0] != "engagement":
-                return 404, pages.error_page(f"Unknown path '{path}'.")
+    def _dispatch(self, routes, path: str, data: dict, code: int):
+        for pattern, handler in routes:
+            match = pattern.match(path)
 
-            project = self._projects.load(UUID(parts[1]))
+            if match:
+                try:
+                    return handler(data, **match.groupdict())
+                except EXPECTED as error:
+                    return code, error_page(str(error), code=code)
 
-            if parts[2] == "resume":
-                return self._resume(project)
+        return 404, error_page(f"Unknown path '{path}'.")
 
-            if len(parts) == 5 and parts[2] == "deliverable" and parts[4] == "review":
-                return self._review(project, parts[3], form)
+    # -------------------------------------------------------- engagements
 
-            return 404, pages.error_page(f"Unknown path '{path}'.")
-
-        except (ValueError, KeyError, FileNotFoundError) as error:
-            return 400, pages.error_page(str(error), code=400)
-
-    # ------------------------------------------------------------ handlers
-
-    def _index(self) -> str:
+    def _engagements(self, query):
         projects = []
         unreadable = []
 
@@ -139,67 +224,252 @@ class ReviewApp:
             try:
                 projects.append(self._projects.load(project_id))
             except Exception as error:
-                # Never silently drop an engagement: a reviewer would have no
-                # way to tell the difference between "not there" and "broken".
+                # Never silently drop an engagement: a reviewer could not tell
+                # the difference between "not there" and "broken".
                 logger.warning("Unreadable engagement %s: %s", project_id, error)
                 unreadable.append((project_id, str(error)))
 
         missions = self._missions.list() if self._missions else []
 
-        return pages.index(projects, missions, unreadable)
+        return 200, pages.index(projects, missions, unreadable)
 
-    def _deliverable(self, project, parts, query) -> tuple[int, str]:
-        key = parts[3]
+    def _engagement(self, query, key):
+        project = self._projects.load(UUID(key))
+
+        return 200, pages.engagement(
+            project,
+            busy=self._runner.busy(project.id),
+            error=self._runner.error(project.id),
+        )
+
+    def _deliverable(self, query, key, name):
+        project = self._projects.load(UUID(key))
 
         try:
-            deliverable = project.deliverable(key)
+            deliverable = project.deliverable(name)
         except UnknownDeliverableError as error:
-            return 404, pages.error_page(str(error))
-
-        if len(parts) == 5 and parts[4] == "diff":
-            versions = [v.version for v in deliverable.versions]
-
-            if len(versions) < 2:
-                return 404, pages.error_page(
-                    "This deliverable has only one version; there is nothing "
-                    "to compare."
-                )
-
-            after = int(query.get("to", [versions[-1]])[0])
-            before = int(query.get("from", [max(v for v in versions if v < after)])[0])
-
-            return 200, pages.diff_view(project, deliverable, before, after)
+            return 404, error_page(str(error))
 
         version = query.get("version")
 
         return 200, pages.deliverable_view(
-            project,
-            deliverable,
-            int(version[0]) if version else None,
+            project, deliverable, int(version[0]) if version else None
         )
 
-    def _review(self, project, key: str, form: dict) -> tuple[int, str]:
+    def _diff(self, query, key, name):
+        project = self._projects.load(UUID(key))
+
+        try:
+            deliverable = project.deliverable(name)
+        except UnknownDeliverableError as error:
+            return 404, error_page(str(error))
+
+        versions = [v.version for v in deliverable.versions]
+
+        if len(versions) < 2:
+            return 404, error_page(
+                "This deliverable has only one version; there is nothing to "
+                "compare."
+            )
+
+        after = int(query.get("to", [versions[-1]])[0])
+        before = int(
+            query.get("from", [max(v for v in versions if v < after)])[0]
+        )
+
+        return 200, pages.diff_view(project, deliverable, before, after)
+
+    def _review(self, form, key, name):
+        project = self._projects.load(UUID(key))
         decision = form.get("decision", [""])[0]
         note = form.get("note", [""])[0].strip() or None
 
-        # The rules live in ProjectService, so the CLI and this page cannot
-        # drift apart on what approval means.
         if decision == "approve":
-            self._service.approve(project, key, note=note)
+            self._service.approve(project, name, note=note)
         elif decision == "reject":
-            self._service.request_changes(project, key, note=note or "")
+            self._service.request_changes(project, name, note=note or "")
         else:
-            return 400, pages.error_page("Unknown review decision.", code=400)
+            return 400, error_page("Unknown review decision.", code=400)
 
         return 303, f"/engagement/{project.id}"
 
-    def _resume(self, project) -> tuple[int, str]:
+    def _submit(self, form, key, name):
+        project = self._projects.load(UUID(key))
+        content = form.get("content", [""])[0]
+
+        self._service.submit_work(project, name, content)
+
+        return 303, f"/engagement/{project.id}"
+
+    def _resume(self, form, key):
+        project = self._projects.load(UUID(key))
+
         self._runner.start(
             project.id,
             lambda: self._service.resume(self._projects.load(project.id)),
         )
 
         return 303, f"/engagement/{project.id}"
+
+    # ------------------------------------------------------------ backlog
+
+    def _require_backlog(self):
+        if self._missions is None:
+            raise RuntimeError("This interface has no mission backlog.")
+
+        return self._missions
+
+    def _catalogue(self):
+        return self._methodologies.all() if self._methodologies else []
+
+    def _backlog(self, query):
+        backlog = self._require_backlog()
+        show_archived = query.get("all", ["0"])[0] == "1"
+
+        return 200, backlog_pages.backlog(
+            backlog.list(include_archived=show_archived),
+            show_archived=show_archived,
+            launching=self._runner.running(),
+        )
+
+    def _mission(self, query, key):
+        backlog = self._require_backlog()
+        mission = backlog.get(UUID(key))
+
+        return 200, backlog_pages.mission_detail(
+            mission,
+            self._catalogue(),
+            launching=self._runner.busy(mission.id),
+            error=self._runner.error(mission.id),
+        )
+
+    def _new_mission(self, query):
+        self._require_backlog()
+
+        return 200, backlog_pages.mission_form(methodologies=self._catalogue())
+
+    def _edit_mission(self, query, key):
+        backlog = self._require_backlog()
+
+        return 200, backlog_pages.mission_form(
+            mission=backlog.get(UUID(key)),
+            methodologies=self._catalogue(),
+        )
+
+    def _form_values(self, form) -> dict:
+        return {
+            name: form.get(name, [""])[0]
+            for name in (
+                "title",
+                "objective",
+                "criteria",
+                "constraints",
+                "priority",
+                "methodology",
+            )
+        }
+
+    def _create_mission(self, form):
+        backlog = self._require_backlog()
+        values = self._form_values(form)
+
+        try:
+            mission = backlog.create(
+                title=values["title"],
+                objective=values["objective"],
+                priority=MissionPriority.parse(values["priority"] or "medium"),
+                criteria=_lines(values["criteria"]),
+                constraints=_constraints(values["constraints"]),
+                methodology=values["methodology"] or None,
+            )
+        except ValueError as error:
+            # Re-render with what they typed rather than losing it.
+            return 400, backlog_pages.mission_form(
+                methodologies=self._catalogue(),
+                error=str(error),
+                values=values,
+            )
+
+        return 303, f"/missions/{mission.id}"
+
+    def _update_mission(self, form, key):
+        backlog = self._require_backlog()
+        values = self._form_values(form)
+        mission = backlog.get(UUID(key))
+
+        try:
+            backlog.update(
+                mission.id,
+                title=values["title"],
+                objective=values["objective"],
+                priority=MissionPriority.parse(values["priority"] or "medium"),
+                clear_criteria=True,
+                add_criteria=_lines(values["criteria"]),
+                clear_constraints=True,
+                add_constraints=_constraints(values["constraints"]),
+            )
+        except ValueError as error:
+            return 400, backlog_pages.mission_form(
+                mission=mission,
+                methodologies=self._catalogue(),
+                error=str(error),
+                values=values,
+            )
+
+        return 303, f"/missions/{mission.id}"
+
+    def _launch(self, form, key):
+        backlog = self._require_backlog()
+        mission = backlog.get(UUID(key))
+        chosen = form.get("methodology", [""])[0].strip()
+
+        if chosen and chosen != (mission.methodology or ""):
+            backlog.update(mission.id, methodology=chosen)
+
+        self._runner.start(
+            mission.id,
+            lambda: backlog.launch(mission.id, resources=self._resources()),
+        )
+
+        return 303, f"/missions/{mission.id}"
+
+    def _archive(self, form, key):
+        backlog = self._require_backlog()
+        backlog.archive(UUID(key))
+
+        return 303, f"/missions/{key}"
+
+    def _restore(self, form, key):
+        backlog = self._require_backlog()
+        backlog.restore(UUID(key))
+
+        return 303, f"/missions/{key}"
+
+    def _delete(self, form, key):
+        backlog = self._require_backlog()
+        backlog.delete(UUID(key))
+
+        return 303, "/missions"
+
+    # ------------------------------------------------------ methodologies
+
+    def _methodologies_page(self, query):
+        if self._methodologies is None:
+            return 404, error_page("No methodology library is configured.")
+
+        return 200, methodology_pages.catalogue(
+            self._methodologies.all(),
+            self._methodologies.techniques(),
+        )
+
+    def _methodology(self, query, key):
+        if self._methodologies is None:
+            return 404, error_page("No methodology library is configured.")
+
+        return 200, methodology_pages.methodology_detail(
+            self._methodologies.get(key),
+            self._methodologies.techniques(),
+        )
 
 
 def build_handler(app: ReviewApp):
@@ -212,12 +482,47 @@ def build_handler(app: ReviewApp):
             self._respond(status, body)
 
         def do_POST(self):  # noqa: N802
+            if not self._same_origin():
+                # The server has no authentication, so a page you visit
+                # elsewhere could otherwise post to it. Reject anything that
+                # did not originate here.
+                self._respond(
+                    403,
+                    error_page(
+                        "Refused: this request came from another site.",
+                        code=403,
+                    ),
+                )
+                return
+
             length = int(self.headers.get("Content-Length", 0) or 0)
             raw = self.rfile.read(length).decode("utf-8") if length else ""
 
             parsed = urlparse(self.path)
             status, body = app.post(parsed.path, parse_qs(raw))
             self._respond(status, body)
+
+        def _same_origin(self) -> bool:
+            """
+            Compare the request's origin against the Host it was sent to.
+
+            Comparing against a set computed at startup was wrong: binding to
+            port 0 produced a server that refused every one of its own posts.
+            The Host header is always the address the browser actually used.
+            """
+            host = self.headers.get("Host")
+
+            if not host:
+                return False
+
+            for header in ("Origin", "Referer"):
+                value = self.headers.get(header)
+
+                if value:
+                    return urlparse(value).netloc == host
+
+            # A form post from the same document may send neither header.
+            return True
 
         def _respond(self, status: int, body: str) -> None:
             if status == 303:
@@ -232,9 +537,11 @@ def build_handler(app: ReviewApp):
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(payload)))
             self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "same-origin")
             self.send_header(
                 "Content-Security-Policy",
-                "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'",
+                "default-src 'none'; style-src 'unsafe-inline'; "
+                "form-action 'self'; frame-ancestors 'none'",
             )
             self.end_headers()
             self.wfile.write(payload)
@@ -246,6 +553,4 @@ def build_handler(app: ReviewApp):
 
 
 def serve(app: ReviewApp, host: str = "127.0.0.1", port: int = 8765):
-    httpd = ThreadingHTTPServer((host, port), build_handler(app))
-
-    return httpd
+    return ThreadingHTTPServer((host, port), build_handler(app))

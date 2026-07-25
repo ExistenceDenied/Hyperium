@@ -104,6 +104,7 @@ class MissionBacklogService:
         clear_criteria: bool = False,
         add_constraints: list[tuple[str, str]] | None = None,
         clear_constraints: bool = False,
+        methodology: str | None = None,
     ) -> Mission:
         mission = self._repository.get(mission_id)
 
@@ -138,6 +139,10 @@ class MissionBacklogService:
 
         if priority is not None:
             mission.priority = priority
+            mission.touch()
+
+        if methodology is not None:
+            mission.methodology = methodology.strip().lower() or None
             mission.touch()
 
         if clear_criteria:

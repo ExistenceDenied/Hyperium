@@ -8,78 +8,13 @@ domain, per the adapter rule in 12-interfaces.md.
 
 from __future__ import annotations
 
-import html
-
 from core.execution.deliverable import Deliverable
 from core.execution.deliverable_status import DeliverableStatus
 from core.execution.execution_result import ExecutionStatus
 from core.project.project import Project
 from interfaces.web import diff as diffing
 from interfaces.web import markdown
-
-STYLE = """
-:root {
-  --bg:#f7f8fa; --fg:#14171f; --muted:#61697a; --line:#e0e4ea; --card:#fff;
-  --accent:#2f6feb; --ok:#1a7f47; --warn:#a8630a; --bad:#b4232c;
-  --add-bg:#e5f5ea; --del-bg:#fdeaec;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg:#12141a; --fg:#e6e9f0; --muted:#98a1b3; --line:#272b36; --card:#191c24;
-    --accent:#6b9bff; --ok:#4cc38a; --warn:#e0a458; --bad:#f0707a;
-    --add-bg:#14301f; --del-bg:#3a1a1e;
-  }
-}
-* { box-sizing:border-box; }
-body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.6
-  ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
-a { color:var(--accent); }
-.wrap { max-width:980px; margin:0 auto; padding:24px 20px 72px; }
-header.top { border-bottom:1px solid var(--line); background:var(--card); }
-header.top .wrap { padding:14px 20px; display:flex; gap:16px; align-items:baseline; }
-header.top strong { font-size:17px; }
-h1 { font-size:24px; margin:22px 0 6px; }
-h2 { font-size:19px; margin:26px 0 8px; }
-.muted { color:var(--muted); }
-.card { background:var(--card); border:1px solid var(--line); border-radius:10px;
-  padding:16px 18px; margin:12px 0; }
-.row { display:flex; justify-content:space-between; gap:16px; align-items:center;
-  flex-wrap:wrap; }
-.pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px;
-  font-weight:600; border:1px solid var(--line); white-space:nowrap; }
-.pill.await { color:var(--warn); border-color:var(--warn); }
-.pill.ok { color:var(--ok); border-color:var(--ok); }
-.pill.bad { color:var(--bad); border-color:var(--bad); }
-.pill.draft { color:var(--muted); }
-table { border-collapse:collapse; width:100%; margin:12px 0; }
-th,td { border:1px solid var(--line); padding:7px 10px; text-align:left;
-  vertical-align:top; }
-th { background:rgba(127,127,127,.08); }
-pre { background:rgba(127,127,127,.10); padding:12px; border-radius:8px;
-  overflow-x:auto; }
-code { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:13px; }
-blockquote { border-left:3px solid var(--line); margin:8px 0; padding:2px 12px;
-  color:var(--muted); }
-button, .btn { font:inherit; padding:7px 14px; border-radius:8px; cursor:pointer;
-  border:1px solid var(--line); background:var(--card); color:var(--fg);
-  text-decoration:none; display:inline-block; }
-button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
-button.danger { color:var(--bad); border-color:var(--bad); }
-textarea { width:100%; font:inherit; padding:9px; border-radius:8px;
-  border:1px solid var(--line); background:var(--bg); color:var(--fg); }
-.doc { overflow-wrap:anywhere; }
-.doc table { display:block; overflow-x:auto; }
-.diff { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12.5px;
-  border:1px solid var(--line); border-radius:8px; overflow-x:auto; }
-.diff-line { padding:1px 10px; white-space:pre; }
-.diff-line.add { background:var(--add-bg); }
-.diff-line.del { background:var(--del-bg); }
-.diff-line.hunk { background:rgba(127,127,127,.14); color:var(--muted); }
-.diff-line.meta { color:var(--muted); }
-.banner { border-left:4px solid var(--warn); padding:10px 14px; margin:14px 0;
-  background:var(--card); border-radius:0 8px 8px 0; }
-.actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
-"""
+from interfaces.web.layout import error_page, esc, page  # noqa: F401
 
 _STATUS_CLASS = {
     DeliverableStatus.AWAITING_APPROVAL: "await",
@@ -87,25 +22,6 @@ _STATUS_CLASS = {
     DeliverableStatus.CHANGES_REQUESTED: "bad",
     DeliverableStatus.DRAFT: "draft",
 }
-
-
-def esc(value) -> str:
-    return html.escape(str(value), quote=True)
-
-
-def page(title: str, body: str, refresh: bool = False) -> str:
-    meta = '<meta http-equiv="refresh" content="4">' if refresh else ""
-
-    return (
-        "<!doctype html><html><head><meta charset='utf-8'>"
-        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-        f"{meta}<title>{esc(title)} · Hyperium</title><style>{STYLE}</style>"
-        "</head><body><header class='top'><div class='wrap'>"
-        "<strong><a href='/' style='text-decoration:none;color:inherit'>"
-        "Hyperium</a></strong>"
-        "<span class='muted'>review</span></div></header>"
-        f"<div class='wrap'>{body}</div></body></html>"
-    )
 
 
 def pill(deliverable: Deliverable) -> str:
@@ -186,7 +102,7 @@ def index(
             "<code>python main.py mission --help</code>.</p>"
         )
 
-    return page("Engagements", "".join(body))
+    return page("Engagements", "".join(body), section="engagements")
 
 
 def engagement(project: Project, busy: bool = False, error: str = "") -> str:
@@ -257,6 +173,7 @@ def engagement(project: Project, busy: bool = False, error: str = "") -> str:
         if deliverable.status is DeliverableStatus.AWAITING_APPROVAL:
             body.append(_review_form(project, deliverable))
 
+        body.append(_submission_forms(project, deliverable))
         body.append("</div>")
 
     if status is ExecutionStatus.AWAITING_APPROVAL and not busy:
@@ -281,7 +198,12 @@ def engagement(project: Project, busy: bool = False, error: str = "") -> str:
         body.extend(f"<div class='muted'>{esc(m)}</div>" for m in result.messages)
         body.append("</div>")
 
-    return page(project.mission.title, "".join(body), refresh=busy)
+    return page(
+        project.mission.title,
+        "".join(body),
+        refresh=busy,
+        section="engagements",
+    )
 
 
 def _stage_heading(plan, stage_key: str | None) -> str:
@@ -315,6 +237,46 @@ def _stage_heading(plan, stage_key: str | None) -> str:
         heading += f"<ul class='muted'>{items}</ul>"
 
     return heading
+
+
+def _submission_forms(project: Project, deliverable: Deliverable) -> str:
+    """
+    Activities allocated to a person are done outside Hyperium; this is where
+    the result comes back in. The plan decides which are ready — the page only
+    asks it.
+    """
+    plan = project.execution_plan
+
+    if plan is None:
+        return ""
+
+    forms = []
+
+    for activity in deliverable.activities:
+        if activity.is_completed:
+            continue
+
+        resource = plan.get_resource(activity)
+
+        if resource is None or type(resource).__name__ == "AIResource":
+            continue
+
+        if not plan.is_ready(activity):
+            continue
+
+        forms.append(
+            f"<form method='post' action='/engagement/{project.id}"
+            f"/activity/{esc(activity.key)}/submit' style='margin-top:14px'>"
+            f"<label>{esc(activity.name)} "
+            f"<span class='hint'>— assigned to {esc(resource.name)}</span>"
+            "</label>"
+            "<textarea name='content' rows='5' required placeholder='Paste "
+            "the work you completed for this activity.'></textarea>"
+            "<div class='actions'><button class='primary' type='submit'>"
+            "Submit work</button></div></form>"
+        )
+
+    return "".join(forms)
 
 
 def _review_form(project: Project, deliverable: Deliverable) -> str:
@@ -433,11 +395,3 @@ def diff_view(
     body.append(diffing.unified(before, after))
 
     return page(f"{deliverable.name} diff", "".join(body))
-
-
-def error_page(message: str, code: int = 404) -> str:
-    return page(
-        "Not found" if code == 404 else "Error",
-        f"<h1>{code}</h1><p class='muted'>{esc(message)}</p>"
-        "<p><a href='/'>Back to engagements</a></p>",
-    )

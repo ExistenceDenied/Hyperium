@@ -1,6 +1,6 @@
 # Interfaces
 
-> Version: 1.0
+> Version: 2.0
 
 ---
 
@@ -59,21 +59,38 @@ The complete lifecycle: mission backlog CRUD, launch, resume, submit, approve,
 reject, list, show, serve. It is the reference interface, and anything the web
 interface can do the CLI can do.
 
-## Web review — `interfaces/web/`
+## Web — `interfaces/web/`
 
-A local, single-user review interface. Its scope is deliberately narrow: the
-parts of the human loop that are genuinely bad in a terminal.
+A local, single-user interface covering the whole lifecycle: capture a mission,
+refine it, launch it, review what comes back, and submit work assigned to a
+person.
 
 | Module | Responsibility |
 |---|---|
-| `server.py` | Routing, request handling, background execution |
-| `pages.py` | HTML rendering — reads domain objects, holds no rules |
+| `server.py` | Routing, request handling, background work, origin checking |
+| `layout.py` | Shared chrome: styles, escaping, navigation |
+| `pages.py` | Engagements, deliverables, diffs |
+| `backlog_pages.py` | Mission backlog and the mission form |
+| `methodology_pages.py` | Read-only methodology and technique browser |
 | `markdown.py` | Markdown to safe HTML |
 | `diff.py` | Version comparison |
 
-It is **not** a general admin console. Mission authoring, configuration and
-backlog management stay on the command line, because a second way to create
-missions is a second thing to keep correct.
+**Version 1 of this document said the opposite** — that mission authoring must
+stay on the command line, "because a second way to create missions is a second
+thing to keep correct". That reasoning was right, and it is what made the
+change safe once the condition was met: since
+[ADR-006](ADR-006-plan-owns-its-governance.md) every governance decision lives
+in `ProjectService` or `MissionBacklogService`, and both interfaces call them.
+Neither reimplements anything.
+
+The parity is asserted, not assumed. `tests/test_web_backlog.py` and
+`tests/test_cli.py` cover the same operations against the same services, and
+the drift that prompted ADR-006 — the web requiring rejection feedback while
+the CLI did not — has a regression test in both.
+
+**Methodologies remain read-only in the browser.** They are the platform's
+most important asset, authored as reviewed, version-controlled JSON. Putting
+them behind a textarea would trade that for convenience.
 
 ---
 
@@ -97,11 +114,22 @@ targets to `http`/`https`, and never emits raw input. Responses carry a
 restrictive `Content-Security-Policy` and `X-Content-Type-Options: nosniff`.
 Any future renderer must preserve these properties.
 
-## Local by default
+## Local by default, and defended anyway
 
-The review server binds to `127.0.0.1` and has **no authentication**. Binding
+The server binds to `127.0.0.1` and has **no authentication**. Binding
 elsewhere prints a warning. Multi-user access, identity and an audit trail are
 4.0 concerns and must not be improvised in the interface layer.
+
+No authentication makes **cross-site request forgery** the real exposure: any
+page open in the same browser can post to localhost. Every state-changing
+request is therefore checked — the `Origin` (or failing that, `Referer`) must
+match the `Host` it was sent to, or it is refused with 403.
+
+An earlier version compared against a set of origins computed at startup from
+the configured port. That was wrong in a way worth recording: binding to port
+0 produced a server that refused every one of its own posts. The `Host` header
+is the address the browser actually used, and is correct however the server
+was bound.
 
 ## Long-running work
 

@@ -173,11 +173,25 @@ configuration and backlog management stay on the command line.
 | Rejection cannot happen without feedback for the model | ✅ |
 | No new runtime dependency | ✅ |
 
-## Explicitly not in 1.5
+## Extended after 1.5
 
-Mission authoring in the browser, configuration UI, dashboards and charts.
-Authentication and multi-user access are **4.0** — the server binds to
-localhost and says so.
+Mission authoring *was* excluded here, on the grounds that a second way to
+create missions is a second thing to keep correct. It was added once that risk
+was removed: [ADR-006](ADR-006-plan-owns-its-governance.md) moved every
+governance decision into the service layer, so both interfaces call the same
+code. See [12-interfaces.md](12-interfaces.md).
+
+| Added later | Status | Where it lives |
+|---|---|---|
+| Mission backlog: list, create, edit, archive, delete | ✅ | `interfaces/web/backlog_pages.py` |
+| Launch an engagement from the browser | ✅ | Background work, with progress |
+| Read-only methodology and technique browser | ✅ | `interfaces/web/methodology_pages.py` |
+| Submit human-assigned work from the browser | ✅ | `pages._submission_forms` |
+| Cross-site request forgery defence | ✅ | Origin/Referer checked against Host |
+
+Still **explicitly not** in scope: a configuration UI, dashboards and charts,
+and editing methodologies through the browser. Authentication and multi-user
+access are **4.0** — the server binds to localhost and says so.
 
 The adapter rule these interfaces follow is recorded in
 [12-interfaces.md](12-interfaces.md).

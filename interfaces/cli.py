@@ -453,7 +453,9 @@ def command_serve(args, settings: Settings) -> int:
     app = ReviewApp(
         service,
         repository,
-        MissionRepository(settings.state_directory / "missions"),
+        missions=build_backlog(settings),
+        methodologies=build_methodologies(settings),
+        resources=lambda: [default_resource(settings)],
     )
 
     httpd = serve(app, host=args.host, port=args.port)
