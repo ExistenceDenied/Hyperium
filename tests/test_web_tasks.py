@@ -155,6 +155,34 @@ def test_new_task_form_renders(tmp_path):
     assert "multipart/form-data" in body  # supports attachments
 
 
+class _RecordingAnswer(AgentProvider):
+    def __init__(self):
+        self.prompts = []
+
+    def chat(self, messages, tools):
+        for message in messages:
+            if message.get("role") == "user":
+                self.prompts.append(message["content"])
+        return AgentTurn(content="done")
+
+
+def test_attached_files_are_named_in_the_prompt(tmp_path):
+    provider = _RecordingAnswer()
+
+    def build(approver, stack, root):
+        return AgentRunner(provider, [], approver=approver)
+
+    repo = TaskRepository(tmp_path / "tasks")
+    runner = WebTaskRunner(build, repo, "m", "sys", workspace=tmp_path)
+
+    task_id = runner.start(
+        "summarize the excel", uploads=[("EY vs Euroclear.xlsx", b"data")]
+    )
+
+    assert _wait(lambda: runner.view(task_id).status == "completed")
+    assert any("EY vs Euroclear.xlsx" in prompt for prompt in provider.prompts)
+
+
 def test_files_upload_and_download_live_on_the_task(tmp_path):
     app = _app(tmp_path)
 

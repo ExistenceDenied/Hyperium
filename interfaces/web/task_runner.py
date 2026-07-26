@@ -187,6 +187,24 @@ class WebTaskRunner:
 
         return sorted(views, key=lambda view: not view.active)
 
+    def _prompt(self, run: _Run) -> str:
+        """
+        The task, prefixed with the files already in its working directory.
+
+        A weaker model will ask "what's the file path?" rather than discover it;
+        naming the attached files up front means it just reads them.
+        """
+        available = [name for name, _ in self.files(run.id)]
+
+        if not available:
+            return run.prompt
+
+        return (
+            "Files provided for this task are in your working directory. Read "
+            "them by name with read_excel or read_file — do not ask for a path. "
+            "Available files: " + ", ".join(available) + ".\n\nTask: " + run.prompt
+        )
+
     def _live_view(self, run: _Run, files) -> TaskView:
         if run.error is not None:
             return TaskView(
@@ -224,7 +242,7 @@ class WebTaskRunner:
 
             with ExitStack() as stack:
                 runner = self._build_runner(run.approver, stack, root)
-                result = runner.run(run.prompt, system=self._system)
+                result = runner.run(self._prompt(run), system=self._system)
 
             run.artifacts = deliverables_from(result.steps, root)
             # Persist before flipping the view to done, so a reader that sees

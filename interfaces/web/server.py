@@ -397,12 +397,14 @@ class ReviewApp:
     def _task_file(self, query, key, name):
         import mimetypes
         from pathlib import Path
+        from urllib.parse import unquote
 
         tasks = self._require_tasks()
         task_id = UUID(key)
 
-        # Path(name).name keeps the download inside the task's own folder.
-        path = tasks.folder(task_id) / Path(name).name
+        # Decode %20 etc. from the URL; Path(name).name keeps the download
+        # inside the task's own folder even if the name contains separators.
+        path = tasks.folder(task_id) / Path(unquote(name)).name
 
         if not path.is_file():
             return 404, error_page(f"No file '{name}' for this task.")
