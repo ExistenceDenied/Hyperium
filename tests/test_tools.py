@@ -28,7 +28,7 @@ def test_read_file_refuses_to_escape_root(tmp_path):
 def test_read_file_reports_a_missing_file(tmp_path):
     tool = ReadFileTool(tmp_path)
 
-    assert "not a file" in tool.invoke({"path": "missing.txt"})
+    assert "does not exist" in tool.invoke({"path": "missing.txt"})
 
 
 def test_list_directory_lists_entries(tmp_path):

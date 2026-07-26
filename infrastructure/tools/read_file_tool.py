@@ -42,7 +42,10 @@ class ReadFileTool(Tool):
             return f"Error: '{raw}' is outside the permitted directory."
 
         if not target.is_file():
-            return f"Error: '{raw}' is not a file."
+            return (
+                f"Error: '{raw}' does not exist. To create it, use write_file; "
+                "to see what files exist, use list_directory."
+            )
 
         data = target.read_bytes()[:MAX_BYTES]
 

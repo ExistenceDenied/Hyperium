@@ -38,7 +38,10 @@ class ReadExcelTool(Tool):
         if target is None:
             return f"Error: '{raw}' is outside the permitted directory."
         if not target.is_file():
-            return f"Error: '{raw}' is not a file."
+            return (
+                f"Error: '{raw}' does not exist yet. To create a new "
+                "spreadsheet, use write_excel instead of reading it first."
+            )
 
         try:
             from openpyxl import load_workbook

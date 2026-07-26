@@ -763,6 +763,7 @@ def command_serve(args, settings: Settings) -> int:
         resources=lambda: [default_resource(settings)],
         tasks=build_web_task_runner(settings),
         connections=ConnectionStore(settings.state_directory / "connections.json"),
+        workspace=settings.workspace,
     )
 
     httpd = serve(app, host=args.host, port=args.port)

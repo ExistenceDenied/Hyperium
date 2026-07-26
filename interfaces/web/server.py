@@ -26,11 +26,13 @@ from core.project.project import UnknownDeliverableError
 from interfaces.web import (
     backlog_pages,
     connections_pages,
+    files_pages,
     methodology_pages,
     pages,
     task_pages,
 )
 from interfaces.web.layout import error_page
+from interfaces.web.multipart import boundary_of, parse_files
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +118,7 @@ class ReviewApp:
         resources=None,
         tasks=None,
         connections=None,
+        workspace=None,
     ) -> None:
         self._service = service
         self._projects = projects
@@ -125,6 +128,7 @@ class ReviewApp:
         self._resources = resources or (lambda: [])
         self._tasks = tasks
         self._connections = connections
+        self._workspace = workspace
 
         self._get_routes = [
             (re.compile(r"^/$"), self._engagements),
@@ -151,6 +155,7 @@ class ReviewApp:
                 self._task,
             ),
             (re.compile(r"^/connections$"), self._connections_index),
+            (re.compile(r"^/files$"), self._files_index),
             (
                 re.compile(
                     r"^/tasks/(?P<key>[0-9a-f-]{36})/deliverable/(?P<index>\d+)$"
@@ -480,6 +485,48 @@ class ReviewApp:
 
         return 303, "/connections"
 
+    # ------------------------------------------------------------- files
+
+    def _uploads_dir(self):
+        from pathlib import Path
+
+        if self._workspace is None:
+            raise RuntimeError("This interface has no workspace for uploads.")
+
+        return Path(self._workspace) / "uploads"
+
+    def _files_index(self, query):
+        directory = self._uploads_dir()
+
+        files = []
+        if directory.is_dir():
+            files = sorted(
+                (path.name, path.stat().st_size)
+                for path in directory.iterdir()
+                if path.is_file()
+            )
+
+        return 200, files_pages.files_index(files)
+
+    def upload(self, path: str, files) -> tuple[int, str]:
+        """Handle a multipart upload posted to `path`."""
+        if path != "/files":
+            return 404, error_page(f"Unknown path '{path}'.")
+
+        from pathlib import Path
+
+        directory = self._uploads_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+
+        for name, content in files:
+            # Path(name).name drops any directory the browser sent, so an
+            # upload can only ever land in the uploads folder.
+            safe = Path(name).name
+            if safe:
+                (directory / safe).write_bytes(content)
+
+        return 303, "/files"
+
     # ------------------------------------------------------------ backlog
 
     def _require_backlog(self):
@@ -726,9 +773,19 @@ def build_handler(app: ReviewApp):
                 return
 
             length = int(self.headers.get("Content-Length", 0) or 0)
-            raw = self.rfile.read(length).decode("utf-8") if length else ""
-
+            content_type = self.headers.get("Content-Type", "")
             parsed = urlparse(self.path)
+
+            if content_type.startswith("multipart/form-data"):
+                # Read raw bytes — the upload may be binary — and pull the files.
+                raw_bytes = self.rfile.read(length) if length else b""
+                boundary = boundary_of(content_type)
+                files = parse_files(raw_bytes, boundary) if boundary else []
+                status, body = app.upload(parsed.path, files)
+                self._respond(status, body)
+                return
+
+            raw = self.rfile.read(length).decode("utf-8") if length else ""
             status, body = app.post(parsed.path, parse_qs(raw))
             self._respond(status, body)
 
