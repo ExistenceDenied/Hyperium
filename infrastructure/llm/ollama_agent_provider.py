@@ -8,6 +8,7 @@ from core.agents.agent_turn import AgentTurn
 from core.agents.tool_call import ToolCall
 from core.interfaces.agent_provider import AgentProvider
 from core.tools.tool import Tool
+from infrastructure.llm.thinking import strip_thinking
 
 
 class OllamaAgentProvider(AgentProvider):
@@ -66,7 +67,7 @@ class OllamaAgentProvider(AgentProvider):
             for call in (getattr(message, "tool_calls", None) or [])
         ]
 
-        content = getattr(message, "content", None) or None
+        content = strip_thinking(getattr(message, "content", None)) or None
 
         return AgentTurn(content=content, tool_calls=calls)
 

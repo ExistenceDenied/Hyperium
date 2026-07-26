@@ -3,6 +3,7 @@ from __future__ import annotations
 import ollama
 
 from core.interfaces.llm_provider import LLMProvider
+from infrastructure.llm.thinking import strip_thinking
 
 
 class OllamaProvider(LLMProvider):
@@ -58,4 +59,7 @@ class OllamaProvider(LLMProvider):
             **extra,
         )
 
-        return response["message"]["content"]
+        # Strip any leaked chain-of-thought — a reasoning model can emit it in
+        # the content even with thinking off, and it must not reach a reply,
+        # a deliverable, or a JSON parser.
+        return strip_thinking(response["message"]["content"])
