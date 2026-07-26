@@ -810,15 +810,20 @@ def build_web_task_runner(settings: Settings):
 
 
 def command_serve(args, settings: Settings) -> int:
+    from application.scheduling.scheduler import Scheduler
     from infrastructure.connectors import ConnectionStore
     from infrastructure.memory import MemoryStore
     from infrastructure.methodologies.technique_repository import TechniqueRepository
+    from infrastructure.scheduling import ScheduleStore
     from interfaces.web.server import ReviewApp, serve
 
     service, repository = build_context(settings)
 
     tasks = build_web_task_runner(settings)
     tasks.start_worker()  # continuously launch queued tasks in the background
+
+    schedules = ScheduleStore(settings.state_directory / "schedules.json")
+    Scheduler(schedules, tasks.queue).start()  # run due schedules on a clock
 
     app = ReviewApp(
         service,
@@ -831,6 +836,7 @@ def command_serve(args, settings: Settings) -> int:
         workspace=settings.workspace,
         techniques=TechniqueRepository(BUILTIN_ROOT / "techniques"),
         memory=MemoryStore(settings.state_directory / "memory.json"),
+        schedules=schedules,
     )
 
     httpd = serve(app, host=args.host, port=args.port)

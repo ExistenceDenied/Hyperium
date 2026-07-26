@@ -122,6 +122,7 @@ class ReviewApp:
         workspace=None,
         techniques=None,
         memory=None,
+        schedules=None,
     ) -> None:
         self._service = service
         self._projects = projects
@@ -134,6 +135,7 @@ class ReviewApp:
         self._workspace = workspace
         self._technique_repo = techniques
         self._memory = memory
+        self._schedules = schedules
 
         self._get_routes = [
             (re.compile(r"^/$"), self._engagements),
@@ -170,6 +172,7 @@ class ReviewApp:
             ),
             (re.compile(r"^/tasks$"), self._tasks_index),
             (re.compile(r"^/tasks/new$"), self._new_task),
+            (re.compile(r"^/schedules/new$"), self._new_schedule),
             (
                 re.compile(r"^/tasks/(?P<key>[0-9a-f-]{36})$"),
                 self._task,
@@ -253,6 +256,15 @@ class ReviewApp:
             (
                 re.compile(r"^/tasks/(?P<key>[0-9a-f-]{36})/improve$"),
                 self._improve_task,
+            ),
+            (re.compile(r"^/schedules$"), self._create_schedule),
+            (
+                re.compile(r"^/schedules/(?P<key>[0-9a-f-]{36})/delete$"),
+                self._delete_schedule,
+            ),
+            (
+                re.compile(r"^/schedules/(?P<key>[0-9a-f-]{36})/toggle$"),
+                self._toggle_schedule,
             ),
             (
                 re.compile(r"^/connections/(?P<key>[\w-]+)/connect$"),
@@ -427,7 +439,10 @@ class ReviewApp:
 
     def _tasks_index(self, query):
         missions = self._missions.list() if self._missions else []
-        return 200, task_pages.tasks_index(self._require_tasks().index(), missions)
+        schedules = self._schedules.list() if self._schedules else []
+        return 200, task_pages.tasks_index(
+            self._require_tasks().index(), missions, schedules
+        )
 
     def _new_task(self, query):
         self._require_tasks()
@@ -534,6 +549,42 @@ class ReviewApp:
     def _improve_task(self, form, key):
         self._require_tasks().suggest_improvements(UUID(key))
         return 303, f"/tasks/{key}"
+
+    # ----------------------------------------------------------- schedules
+
+    def _require_schedules(self):
+        if self._schedules is None:
+            raise RuntimeError("This interface has no schedule store.")
+        return self._schedules
+
+    def _new_schedule(self, query):
+        self._require_schedules()
+        techniques = self._technique_repo.list() if self._technique_repo else []
+        methodologies = self._methodologies.all() if self._methodologies else []
+        return 200, task_pages.new_schedule(techniques, methodologies)
+
+    def _create_schedule(self, form):
+        prompt = form.get("prompt", [""])[0].strip()
+        if not prompt:
+            return 400, error_page("A schedule needs a prompt.", code=400)
+        self._require_schedules().add(
+            prompt,
+            every_hours=int(form.get("every_hours", ["24"])[0]),
+            priority=form.get("priority", ["medium"])[0],
+            technique=form.get("technique", [""])[0],
+            methodology=form.get("methodology", [""])[0],
+        )
+        return 303, "/tasks"
+
+    def _toggle_schedule(self, form, key):
+        schedule = self._require_schedules().get(UUID(key))
+        if schedule is not None:
+            self._schedules.set_enabled(UUID(key), not schedule.enabled)
+        return 303, "/tasks"
+
+    def _delete_schedule(self, form, key):
+        self._require_schedules().delete(UUID(key))
+        return 303, "/tasks"
 
     def _add_note(self, form, key):
         note = form.get("note", [""])[0].strip()

@@ -67,7 +67,47 @@ def _backlog_section(missions) -> str:
     )
 
 
-def tasks_index(views, missions=()) -> str:
+def _schedules_section(schedules) -> str:
+    new = "<a class='btn' href='/schedules/new'>New schedule</a>"
+
+    if not schedules:
+        listing = "<p class='muted small'>Nothing runs on a clock yet.</p>"
+    else:
+        rows = []
+        for schedule in schedules:
+            state = "on" if schedule.enabled else "off"
+            kind = "ok" if schedule.enabled else "draft"
+            toggle = "Pause" if schedule.enabled else "Resume"
+            rows.append(
+                f"<tr><td><span class='pill {kind}'>{state}</span></td>"
+                f"<td class='muted small'>{esc(schedule.cadence)}</td>"
+                f"<td>{esc(schedule.prompt[:90])}"
+                f"{'…' if len(schedule.prompt) > 90 else ''}</td>"
+                "<td style='white-space:nowrap'>"
+                f"<form method='post' action='/schedules/{schedule.id}/toggle' "
+                "style='display:inline;margin:0'>"
+                f"<button type='submit'>{toggle}</button></form> "
+                f"<form method='post' action='/schedules/{schedule.id}/delete' "
+                "style='display:inline;margin:0'>"
+                "<button class='danger' type='submit'>Delete</button>"
+                "</form></td></tr>"
+            )
+        listing = (
+            "<table><thead><tr><th style='width:70px'>State</th>"
+            "<th style='width:90px'>Runs</th><th>Task</th>"
+            "<th style='width:160px'></th></tr></thead>"
+            f"<tbody>{''.join(rows)}</tbody></table>"
+        )
+
+    return (
+        "<div class='row' style='margin-top:28px'><h2>Schedules</h2>" + new + "</div>"
+        "<p class='muted small'>Standing tasks the system runs on a clock. When "
+        "one is due it goes on the queue and the worker runs it — so work happens "
+        "without you starting it.</p>" + listing
+    )
+
+
+def tasks_index(views, missions=(), schedules=()) -> str:
     new = "<a class='btn primary' href='/tasks/new'>New task</a>"
 
     if views:
@@ -91,6 +131,7 @@ def tasks_index(views, missions=()) -> str:
     body = (
         "<div class='row'><h1>Tasks</h1>" + new + "</div>"
         + tasks
+        + _schedules_section(list(schedules or []))
         + _backlog_section(list(missions or []))
     )
 
@@ -144,6 +185,49 @@ def new_task(techniques=(), methodologies=()) -> str:
     )
 
     return page("New task", body, section="tasks")
+
+
+def new_schedule(techniques=(), methodologies=()) -> str:
+    body = (
+        "<h1>New schedule</h1>"
+        "<p class='muted'>A task the system runs on a clock. Each time it is "
+        "due, it is added to the queue and the worker runs it — using your "
+        "business memory, and the technique or methodology you pick.</p>"
+        "<form method='post' action='/schedules'>"
+        "<label>Task"
+        "<textarea name='prompt' rows='4' required placeholder='e.g. Summarise "
+        "yesterday&#39;s new invoices into invoices.xlsx.'></textarea></label>"
+        "<div class='grid2'>"
+        "<label>Runs"
+        "<select name='every_hours'>"
+        "<option value='1'>Hourly</option>"
+        "<option value='24' selected>Daily</option>"
+        "<option value='168'>Weekly</option>"
+        "</select></label>"
+        "<label>Priority"
+        "<select name='priority'>"
+        "<option value='low'>Low</option>"
+        "<option value='medium' selected>Medium</option>"
+        "<option value='high'>High</option>"
+        "</select></label>"
+        "</div>"
+        "<div class='grid2'>"
+        "<label>Technique (optional)"
+        "<select name='technique'><option value=''>— none —</option>"
+        + _options(techniques)
+        + "</select></label>"
+        "<label>Methodology (optional)"
+        "<select name='methodology'><option value=''>— none —</option>"
+        + _options(methodologies)
+        + "</select></label>"
+        "</div>"
+        "<div class='actions'><button class='primary' type='submit'>"
+        "Create schedule</button>"
+        "<a class='btn' href='/tasks'>Cancel</a></div>"
+        "</form>"
+    )
+
+    return page("New schedule", body, section="tasks")
 
 
 def _approval_card(view) -> str:
