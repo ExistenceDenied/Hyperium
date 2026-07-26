@@ -810,18 +810,20 @@ def build_web_task_runner(settings: Settings, notify=None):
     )
 
 
-def start_inbox_worker(settings: Settings, inbox, notifications) -> None:
+def start_inbox_worker(settings: Settings, inbox, notifications, enqueue) -> None:
     """
-    Best-effort: start the draft-only inbox worker when Outlook is connected.
+    Best-effort: start the triage inbox worker when Outlook is connected.
 
     Connecting to the mail server can be slow or need a sign-in, so it runs on a
     background thread and never blocks serving. If Outlook is not connected, the
-    Email page still works — it just prompts you to connect first.
+    Email page still works — it just prompts you to connect first. `enqueue` is
+    the task queue, so work the mail implies becomes tasks the worker runs.
     """
     import threading
 
     def build_and_run() -> None:
         from application.email.email_responder import EmailResponder
+        from application.email.email_triage import EmailTriage
         from application.email.inbox_worker import InboxWorker
         from infrastructure.connectors import ConnectionStore
         from infrastructure.email.ms365_mail import Ms365MailProvider
@@ -843,12 +845,17 @@ def start_inbox_worker(settings: Settings, inbox, notifications) -> None:
             return
 
         provider = Ms365MailProvider(client.call_tool)
-        responder = EmailResponder(build_llm(settings))
         memory = MemoryStore(settings.state_directory / "memory.json")
+        # Triage judges in JSON mode; the responder writes the actual reply.
+        triage = EmailTriage(build_llm(settings, settings.review_model or None,
+                                       json_mode=True))
+        responder = EmailResponder(build_llm(settings))
         InboxWorker(
             provider,
+            triage,
             responder,
             inbox,
+            enqueue=enqueue,
             context=memory.as_context,
             notify=notifications.add,
         ).start()
@@ -877,7 +884,8 @@ def command_serve(args, settings: Settings) -> int:
     Scheduler(schedules, tasks.queue).start()  # run due schedules on a clock
 
     inbox = InboxStore(settings.state_directory / "inbox.json")
-    start_inbox_worker(settings, inbox, notifications)  # draft replies, never send
+    # Triage the folder, draft replies (never send), and queue implied work.
+    start_inbox_worker(settings, inbox, notifications, tasks.queue)
 
     app = ReviewApp(
         service,

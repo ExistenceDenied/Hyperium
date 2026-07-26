@@ -37,7 +37,15 @@ class InboxStore:
     def is_handled(self, message_id: str) -> bool:
         return any(item["id"] == message_id for item in self._read().get("handled", []))
 
-    def mark_handled(self, message_id: str, sender: str, subject: str) -> None:
+    def mark_handled(
+        self,
+        message_id: str,
+        sender: str,
+        subject: str,
+        category: str = "",
+        summary: str = "",
+        actions: list[str] | None = None,
+    ) -> None:
         with self._lock:
             data = self._read()
             handled = data.setdefault("handled", [])
@@ -49,6 +57,9 @@ class InboxStore:
                     "id": message_id,
                     "sender": sender,
                     "subject": subject,
+                    "category": category,
+                    "summary": summary,
+                    "actions": list(actions or []),
                     "at": datetime.now(timezone.utc).isoformat(),
                 },
             )
