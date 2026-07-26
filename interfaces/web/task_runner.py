@@ -70,6 +70,8 @@ class _Run:
     prompt: str
     approver: WebApprover
     priority: str = "medium"
+    technique: str = ""
+    methodology: str = ""
     result: AgentResult | None = None
     error: str | None = None
     artifacts: list[str] = field(default_factory=list)
@@ -91,6 +93,8 @@ class TaskView:
     priority: str = "medium"
     duration: float | None = None
     notes: list[Note] = field(default_factory=list)
+    technique: str = ""
+    methodology: str = ""
 
 
 class WebTaskRunner:
@@ -102,12 +106,16 @@ class WebTaskRunner:
     control is the person approving rather than a switch set beforehand.
     """
 
-    def __init__(self, build_runner, repository, model, system, workspace) -> None:
+    def __init__(
+        self, build_runner, repository, model, system, workspace, approach=None
+    ) -> None:
         self._build_runner = build_runner
         self._repository = repository
         self._model = model
         self._system = system
         self._workspace = Path(workspace)
+        # approach(technique_key, methodology_key) -> guidance text to prepend.
+        self._approach = approach or (lambda technique, methodology: "")
         self._runs: dict[UUID, _Run] = {}
         self._lock = threading.Lock()
 
@@ -138,6 +146,8 @@ class WebTaskRunner:
         uploads=None,
         task_id: UUID | None = None,
         priority: str = "medium",
+        technique: str = "",
+        methodology: str = "",
     ) -> UUID:
         task_id = task_id or uuid4()
         self.folder(task_id).mkdir(parents=True, exist_ok=True)
@@ -146,7 +156,12 @@ class WebTaskRunner:
             self.save_uploads(task_id, uploads)
 
         run = _Run(
-            id=task_id, prompt=prompt, approver=WebApprover(), priority=priority
+            id=task_id,
+            prompt=prompt,
+            approver=WebApprover(),
+            priority=priority,
+            technique=technique,
+            methodology=methodology,
         )
 
         with self._lock:
@@ -190,6 +205,8 @@ class WebTaskRunner:
         if run is not None:
             view = self._live_view(run, files)
             view.priority = run.priority
+            view.technique = run.technique
+            view.methodology = run.methodology
         else:
             result = record.result
             view = TaskView(
@@ -208,6 +225,8 @@ class WebTaskRunner:
             view.priority = record.priority
             view.notes = list(record.notes)
             view.duration = record.duration_seconds
+            view.technique = record.technique
+            view.methodology = record.methodology
 
         return view
 
@@ -228,21 +247,30 @@ class WebTaskRunner:
 
     def _prompt(self, run: _Run) -> str:
         """
-        The task, prefixed with the files already in its working directory.
+        The task, prefixed with the chosen approach and the files it can use.
 
-        A weaker model will ask "what's the file path?" rather than discover it;
-        naming the attached files up front means it just reads them.
+        A technique or methodology adds its guidance and template up front so the
+        work follows it; naming the attached files means a weaker model reads
+        them rather than asking "what's the file path?".
         """
-        available = [name for name, _ in self.files(run.id)]
+        preamble = []
 
-        if not available:
+        approach = self._approach(run.technique, run.methodology)
+        if approach:
+            preamble.append(approach)
+
+        available = [name for name, _ in self.files(run.id)]
+        if available:
+            preamble.append(
+                "Files provided for this task are in your working directory. "
+                "Read them by name with read_excel or read_file — do not ask "
+                "for a path. Available files: " + ", ".join(available) + "."
+            )
+
+        if not preamble:
             return run.prompt
 
-        return (
-            "Files provided for this task are in your working directory. Read "
-            "them by name with read_excel or read_file — do not ask for a path. "
-            "Available files: " + ", ".join(available) + ".\n\nTask: " + run.prompt
-        )
+        return "\n\n".join(preamble) + "\n\nTask: " + run.prompt
 
     def _live_view(self, run: _Run, files) -> TaskView:
         if run.error is not None:
@@ -299,6 +327,8 @@ class WebTaskRunner:
                     result=result,
                     artifacts=run.artifacts,
                     priority=run.priority,
+                    technique=run.technique,
+                    methodology=run.methodology,
                     completed_at=datetime.now(timezone.utc),
                     notes=existing,
                 )

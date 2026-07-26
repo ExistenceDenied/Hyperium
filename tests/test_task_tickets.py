@@ -13,6 +13,8 @@ def test_priority_notes_and_duration_round_trip():
     record = TaskRecord(
         prompt="write a quote",
         priority="high",
+        technique="business-case",
+        methodology="customer-proposal",
         created_at=datetime(2026, 1, 1, 9, 0, tzinfo=timezone.utc),
         completed_at=datetime(2026, 1, 1, 9, 1, tzinfo=timezone.utc),
         notes=[Note(text="looks good", at=datetime(2026, 1, 1, tzinfo=timezone.utc))],
@@ -22,6 +24,8 @@ def test_priority_notes_and_duration_round_trip():
     restored = serializer.from_dict(serializer.to_dict(record))
 
     assert restored.priority == "high"
+    assert restored.technique == "business-case"
+    assert restored.methodology == "customer-proposal"
     assert restored.duration_seconds == 60
     assert restored.notes[0].text == "looks good"
 

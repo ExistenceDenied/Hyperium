@@ -724,11 +724,43 @@ def build_web_task_runner(settings: Settings):
     from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
     from infrastructure.mcp.mcp_client import McpClient
     from infrastructure.mcp.mcp_toolset import connect_mcp_tools
+    from infrastructure.methodologies.technique_repository import TechniqueRepository
     from infrastructure.persistence.task_repository import TaskRepository
     from infrastructure.tools import writable_tools
     from interfaces.web.task_runner import WebTaskRunner
 
     connections = ConnectionStore(settings.state_directory / "connections.json")
+    techniques = TechniqueRepository(BUILTIN_ROOT / "techniques")
+    methodologies = build_methodologies(settings)
+
+    def approach(technique_key, methodology_key):
+        parts = []
+
+        if technique_key:
+            technique = techniques.get(technique_key)
+            if technique:
+                block = [f"Apply the '{technique.name}' technique to this task."]
+                if technique.guidance:
+                    block.append(technique.guidance)
+                if technique.template:
+                    block.append("The output must follow this template:")
+                    block.append(technique.template)
+                parts.append("\n".join(block))
+
+        if methodology_key:
+            found = next(
+                (m for m in methodologies.all() if m.key == methodology_key), None
+            )
+            if found:
+                block = [
+                    f"Work in the style of the '{found.name}' methodology.",
+                    found.description,
+                ]
+                if found.principles:
+                    block.append("Its principles: " + " ".join(found.principles))
+                parts.append("\n".join(block))
+
+        return "\n\n".join(parts)
 
     def make_runner(approver, stack, root):
         provider = OllamaAgentProvider(
@@ -761,6 +793,7 @@ def build_web_task_runner(settings: Settings):
         model=settings.model,
         system=AGENT_SYSTEM,
         workspace=settings.workspace,
+        approach=approach,
     )
 
 

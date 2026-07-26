@@ -44,6 +44,10 @@ class TaskRecord:
     priority: str = "medium"
     completed_at: datetime | None = None
     notes: list[Note] = field(default_factory=list)
+    #: An optional technique or methodology whose approach the task should
+    #: follow — its guidance and template shape how the agent works.
+    technique: str = ""
+    methodology: str = ""
 
     @property
     def status(self) -> str:

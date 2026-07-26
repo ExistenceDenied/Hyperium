@@ -55,7 +55,7 @@ def backlog(missions, show_archived: bool = False, launching=()) -> str:
             "<a class='btn primary' href='/missions/new'>Add the first "
             "mission</a></div>"
         )
-        return page("Backlog", "".join(body), section="backlog")
+        return page("Backlog", "".join(body), section="tasks")
 
     body.append(
         "<table><thead><tr><th>Priority</th><th>Status</th><th>Mission</th>"
@@ -91,7 +91,7 @@ def backlog(missions, show_archived: bool = False, launching=()) -> str:
     )
 
     return page(
-        "Backlog", "".join(body), refresh=bool(launching), section="backlog"
+        "Backlog", "".join(body), refresh=bool(launching), section="tasks"
     )
 
 
@@ -140,7 +140,7 @@ def mission_detail(
         body.append(_manage(mission))
 
     return page(
-        mission.title, "".join(body), refresh=launching, section="backlog"
+        mission.title, "".join(body), refresh=launching, section="tasks"
     )
 
 
@@ -357,7 +357,7 @@ def confirm_delete(mission) -> str:
         "<button class='danger' type='submit'>Delete permanently</button>"
         f"<a class='btn' href='/missions/{mission.id}'>Cancel</a>"
         "</div></form>",
-        section="backlog",
+        section="tasks",
     )
 
 
@@ -454,5 +454,5 @@ def mission_form(
         f"<a class='btn' href='/missions"
         f"{'/' + str(mission.id) if editing else ''}'>Cancel</a>"
         "</div></form>",
-        section="backlog",
+        section="tasks",
     )

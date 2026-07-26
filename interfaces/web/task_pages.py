@@ -40,52 +40,96 @@ def _duration(view) -> str:
     return f"{seconds}s" if seconds < 60 else f"{seconds // 60}m {seconds % 60}s"
 
 
-def tasks_index(views) -> str:
+def _backlog_section(missions) -> str:
+    new = "<a class='btn' href='/missions/new'>New mission</a>"
+
+    if not missions:
+        listing = "<p class='muted small'>No missions in the backlog.</p>"
+    else:
+        rows = "".join(
+            f"<tr><td><span class='pill draft'>{esc(mission.status.value)}</span></td>"
+            f"<td class='muted small'>{esc(mission.priority.name.lower())}</td>"
+            f"<td><a href='/missions/{mission.id}'>{esc(mission.title)}</a></td></tr>"
+            for mission in missions
+        )
+        listing = (
+            "<table><thead><tr><th style='width:130px'>Status</th>"
+            "<th style='width:90px'>Priority</th><th>Mission</th></tr></thead>"
+            f"<tbody>{rows}</tbody></table>"
+        )
+
+    return (
+        "<div class='row' style='margin-top:28px'><h2>Backlog</h2>" + new + "</div>"
+        "<p class='muted small'>Larger pieces of work. A mission becomes a full "
+        "methodology-driven engagement when you launch it.</p>" + listing
+    )
+
+
+def tasks_index(views, missions=()) -> str:
     new = "<a class='btn primary' href='/tasks/new'>New task</a>"
 
-    if not views:
-        body = (
-            "<div class='row'><h1>Tasks</h1>" + new + "</div>"
-            "<div class='empty'>No tasks yet. Give the agent something to do.</div>"
-        )
-        return page("Tasks", body, section="tasks")
-
-    rows = []
-    for view in views:
-        prompt = esc(view.prompt[:90] + ("…" if len(view.prompt) > 90 else ""))
-        rows.append(
+    if views:
+        rows = "".join(
             f"<tr><td>{_pill(view.status)}</td>"
             f"<td>{_priority_pill(view.priority)}</td>"
-            f"<td><a href='/tasks/{view.id}'>{prompt}</a></td></tr>"
+            "<td><a href='/tasks/"
+            f"{view.id}'>"
+            + esc(view.prompt[:90] + ("…" if len(view.prompt) > 90 else ""))
+            + "</a></td></tr>"
+            for view in views
         )
+        tasks = (
+            "<table><thead><tr><th style='width:130px'>Status</th>"
+            "<th style='width:90px'>Priority</th>"
+            f"<th>Task</th></tr></thead><tbody>{rows}</tbody></table>"
+        )
+    else:
+        tasks = "<div class='empty'>No tasks yet. Give the agent a quick job.</div>"
 
     body = (
         "<div class='row'><h1>Tasks</h1>" + new + "</div>"
-        "<table><thead><tr><th style='width:130px'>Status</th>"
-        "<th style='width:90px'>Priority</th>"
-        "<th>Task</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        + tasks
+        + _backlog_section(list(missions or []))
     )
 
     return page("Tasks", body, section="tasks")
 
 
-def new_task() -> str:
+def _options(items) -> str:
+    return "".join(
+        f"<option value='{esc(item.key)}'>{esc(item.name)}</option>"
+        for item in items
+    )
+
+
+def new_task(techniques=(), methodologies=()) -> str:
     body = (
         "<h1>New task</h1>"
         "<p class='muted'>Describe the job, and attach any files the agent "
-        "should use. It can read and write files and reach the web, and will "
-        "ask you before it changes or sends anything.</p>"
+        "should use. Optionally pick a technique or methodology for it to "
+        "follow. It can read and write files and reach the web, and will ask "
+        "you before it changes or sends anything.</p>"
         "<form method='post' action='/tasks' enctype='multipart/form-data'>"
         "<label>Task"
         "<textarea name='prompt' rows='4' required placeholder='e.g. Turn the "
         "prices in the attached file into a quote in quote.xlsx.'></textarea>"
         "</label>"
+        "<div class='grid2'>"
         "<label>Priority"
         "<select name='priority'>"
         "<option value='low'>Low</option>"
         "<option value='medium' selected>Medium</option>"
         "<option value='high'>High</option>"
         "</select></label>"
+        "<label>Technique (optional)"
+        "<select name='technique'><option value=''>— none —</option>"
+        + _options(techniques)
+        + "</select></label>"
+        "</div>"
+        "<label>Methodology (optional)"
+        "<select name='methodology'><option value=''>— none —</option>"
+        + _options(methodologies)
+        + "</select></label>"
         "<label>Attach files (optional)"
         "<input type='file' name='files' multiple></label>"
         "<div class='actions'><button class='primary' type='submit'>"
@@ -187,11 +231,21 @@ def task_detail(view) -> str:
         else ""
     )
 
+    approach = ""
+    if view.technique:
+        approach += (
+            f" <span class='small muted'>· technique: {esc(view.technique)}</span>"
+        )
+    if view.methodology:
+        approach += (
+            f" <span class='small muted'>· methodology: {esc(view.methodology)}</span>"
+        )
+
     parts = [
         "<div class='row'><h1>Task</h1>"
         "<a class='btn' href='/tasks'>All tasks</a></div>",
         f"<div class='card'><div class='row'><div>{_pill(view.status)} "
-        f"{_priority_pill(view.priority)}{took}</div>"
+        f"{_priority_pill(view.priority)}{took}{approach}</div>"
         f"<form method='post' action='/tasks/{view.id}/rerun' style='margin:0'>"
         "<button type='submit'>Run again</button></form></div>"
         f"<p style='margin-bottom:0'>{esc(view.prompt)}</p></div>",

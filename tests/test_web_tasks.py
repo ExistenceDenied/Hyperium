@@ -203,6 +203,27 @@ def test_task_carries_priority_notes_and_duration(tmp_path):
     assert any(note.text == "reviewed and good" for note in view.notes)
 
 
+def test_task_applies_a_chosen_technique(tmp_path):
+    provider = _RecordingAnswer()
+
+    def build(approver, stack, root):
+        return AgentRunner(provider, [], approver=approver)
+
+    def approach(technique, methodology):
+        return "Apply the SWOT technique." if technique == "swot" else ""
+
+    repo = TaskRepository(tmp_path / "tasks")
+    runner = WebTaskRunner(
+        build, repo, "m", "sys", workspace=tmp_path, approach=approach
+    )
+
+    task_id = runner.start("analyse the market", technique="swot")
+    assert _wait(lambda: runner.view(task_id).status == "completed")
+
+    assert any("Apply the SWOT technique." in p for p in provider.prompts)
+    assert runner.view(task_id).technique == "swot"
+
+
 def test_note_route_adds_a_comment(tmp_path):
     app = _app(tmp_path)
 

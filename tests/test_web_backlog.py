@@ -615,7 +615,8 @@ def test_navigation_is_present_on_every_section(tmp_path):
     for path in ("/", "/missions", "/methodologies"):
         _, body = app.get(path, {})
 
-        assert "href='/missions'" in body
+        # The backlog now lives under the Tasks tab, not its own nav item.
+        assert "href='/tasks'" in body
         assert "href='/methodologies'" in body
 
 

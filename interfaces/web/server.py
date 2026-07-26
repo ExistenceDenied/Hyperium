@@ -405,12 +405,16 @@ class ReviewApp:
         return self._tasks
 
     def _tasks_index(self, query):
-        return 200, task_pages.tasks_index(self._require_tasks().index())
+        missions = self._missions.list() if self._missions else []
+        return 200, task_pages.tasks_index(self._require_tasks().index(), missions)
 
     def _new_task(self, query):
         self._require_tasks()
 
-        return 200, task_pages.new_task()
+        techniques = self._technique_repo.list() if self._technique_repo else []
+        methodologies = self._methodologies.all() if self._methodologies else []
+
+        return 200, task_pages.new_task(techniques, methodologies)
 
     def _task(self, query, key):
         view = self._require_tasks().view(UUID(key))
@@ -449,7 +453,11 @@ class ReviewApp:
                 return 400, error_page("A task needs a prompt.", code=400)
             priority = (fields.get("priority") or "medium").strip()
             task_id = self._require_tasks().start(
-                prompt, uploads=files, priority=priority
+                prompt,
+                uploads=files,
+                priority=priority,
+                technique=(fields.get("technique") or "").strip(),
+                methodology=(fields.get("methodology") or "").strip(),
             )
             return 303, f"/tasks/{task_id}"
 
@@ -491,7 +499,13 @@ class ReviewApp:
 
         # Re-run in place: same folder, so any files uploaded to the task are
         # used and its outputs update rather than starting a fresh task.
-        tasks.start(view.prompt, task_id=task_id, priority=view.priority)
+        tasks.start(
+            view.prompt,
+            task_id=task_id,
+            priority=view.priority,
+            technique=view.technique,
+            methodology=view.methodology,
+        )
 
         return 303, f"/tasks/{task_id}"
 
