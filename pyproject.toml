@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "hyperium"
 version = "0.2.0"
@@ -28,6 +32,12 @@ office = [
 
 [project.scripts]
 hyperium = "interfaces.cli:main"
+
+# The repo is a flat layout with data/runtime dirs (methodologies, templates,
+# logs, workspace) alongside the source. List the real packages explicitly so
+# setuptools does not try to auto-discover and fail on the non-package dirs.
+[tool.setuptools.packages.find]
+include = ["core*", "application*", "infrastructure*", "interfaces*", "config*"]
 
 [tool.black]
 line-length = 88

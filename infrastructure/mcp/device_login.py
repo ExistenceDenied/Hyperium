@@ -5,6 +5,8 @@ import re
 import subprocess
 import threading
 
+from infrastructure.mcp.launch import resolve_argv
+
 logger = logging.getLogger(__name__)
 
 _URL = re.compile(r"https?://\S*(?:devicelogin|microsoft\.com)\S*", re.IGNORECASE)
@@ -27,7 +29,7 @@ def begin_device_login(command: str, args: list[str], timeout: float = 40.0) -> 
     """
     try:
         proc = subprocess.Popen(
-            [command, *args, "--login"],
+            resolve_argv(command, [*args, "--login"]),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,

@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import os
 import queue
-import shutil
 import subprocess
 import threading
 import time
 from collections.abc import Mapping, Sequence
+
+from infrastructure.mcp.launch import resolve_argv
 
 PROTOCOL_VERSION = "2024-11-05"
 
@@ -76,18 +77,7 @@ class McpClient:
         return self
 
     def _argv(self) -> list[str]:
-        """
-        Resolve the command so it launches on Windows as well as POSIX.
-
-        A bare name like ``npx`` is really ``npx.cmd`` on Windows, which
-        CreateProcess cannot run directly — so resolve it on PATH and route a
-        ``.cmd``/``.bat`` through ``cmd /c``. Without this, every npx-based
-        connector fails with "the system cannot find the file specified".
-        """
-        resolved = shutil.which(self._command) or self._command
-        if os.name == "nt" and resolved.lower().endswith((".cmd", ".bat")):
-            return ["cmd", "/c", resolved, *self._args]
-        return [resolved, *self._args]
+        return resolve_argv(self._command, self._args)
 
     def list_tools(self) -> list[dict]:
         return self._request("tools/list", {}).get("tools", [])
