@@ -37,6 +37,17 @@ PRESETS: dict[str, ConnectorPreset] = {
         "browser to authorise access; the token is stored by the connector, "
         "not by Hyperium. Sending an email is always held for your approval.",
     ),
+    "outlook": ConnectorPreset(
+        key="outlook",
+        name="Outlook / Microsoft 365",
+        category="Email",
+        description="Read Outlook mail and draft replies, so the agent can watch "
+        "a folder and prepare answers for you to send.",
+        command="npx",
+        args=["-y", "@softeria/ms-365-mcp-server"],
+        setup="Requires Node.js and a one-time Microsoft sign-in. Powers the "
+        "Email page's inbox worker, which only ever drafts — never sends.",
+    ),
     "google-calendar": ConnectorPreset(
         key="google-calendar",
         name="Google Calendar",

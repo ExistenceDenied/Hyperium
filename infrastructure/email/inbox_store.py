@@ -1,0 +1,72 @@
+from __future__ import annotations
+
+import json
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+class InboxStore:
+    """
+    The inbox worker's settings and memory, in one JSON file.
+
+    Holds whether the worker is on, which folder it watches, and a log of the
+    messages it has already drafted a reply to — so it acts once per message and
+    the log can be shown on the Email page.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self._path = Path(path)
+        self._lock = threading.Lock()
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self._read().get("enabled", False))
+
+    @property
+    def folder(self) -> str:
+        return self._read().get("folder", "Inbox")
+
+    def configure(self, enabled: bool, folder: str) -> None:
+        with self._lock:
+            data = self._read()
+            data["enabled"] = bool(enabled)
+            data["folder"] = (folder or "Inbox").strip() or "Inbox"
+            self._write(data)
+
+    def is_handled(self, message_id: str) -> bool:
+        return any(item["id"] == message_id for item in self._read().get("handled", []))
+
+    def mark_handled(self, message_id: str, sender: str, subject: str) -> None:
+        with self._lock:
+            data = self._read()
+            handled = data.setdefault("handled", [])
+            if any(item["id"] == message_id for item in handled):
+                return
+            handled.insert(
+                0,
+                {
+                    "id": message_id,
+                    "sender": sender,
+                    "subject": subject,
+                    "at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            data["handled"] = handled[:200]
+            self._write(data)
+
+    def handled(self) -> list[dict]:
+        return list(self._read().get("handled", []))
+
+    # --------------------------------------------------------- internals
+
+    def _read(self) -> dict:
+        if not self._path.is_file():
+            return {}
+        return json.loads(self._path.read_text(encoding="utf-8"))
+
+    def _write(self, data: dict) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.write_text(
+            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )

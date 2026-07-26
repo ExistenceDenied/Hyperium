@@ -100,6 +100,7 @@ _NAV = (
     ("/", "Dashboard", "dashboard"),
     ("/engagements", "Engagements", "engagements"),
     ("/tasks", "Tasks", "tasks"),
+    ("/email", "Email", "email"),
     ("/memory", "Memory", "memory"),
     ("/connections", "Connect", "connections"),
     ("/methodologies", "Methodologies", "methodologies"),

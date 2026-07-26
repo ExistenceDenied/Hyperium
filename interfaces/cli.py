@@ -810,9 +810,56 @@ def build_web_task_runner(settings: Settings, notify=None):
     )
 
 
+def start_inbox_worker(settings: Settings, inbox, notifications) -> None:
+    """
+    Best-effort: start the draft-only inbox worker when Outlook is connected.
+
+    Connecting to the mail server can be slow or need a sign-in, so it runs on a
+    background thread and never blocks serving. If Outlook is not connected, the
+    Email page still works — it just prompts you to connect first.
+    """
+    import threading
+
+    def build_and_run() -> None:
+        from application.email.email_responder import EmailResponder
+        from application.email.inbox_worker import InboxWorker
+        from infrastructure.connectors import ConnectionStore
+        from infrastructure.email.ms365_mail import Ms365MailProvider
+        from infrastructure.mcp.mcp_client import McpClient
+        from infrastructure.memory import MemoryStore
+
+        connections = ConnectionStore(settings.state_directory / "connections.json")
+        spec = connections.specs().get("outlook")
+        if spec is None:
+            return  # not connected; the page will say so
+
+        try:
+            client = McpClient(spec.command, spec.args, env=spec.env)
+            client.__enter__()  # kept open for the life of the server
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Outlook connector is unavailable; the inbox worker is idle."
+            )
+            return
+
+        provider = Ms365MailProvider(client.call_tool)
+        responder = EmailResponder(build_llm(settings))
+        memory = MemoryStore(settings.state_directory / "memory.json")
+        InboxWorker(
+            provider,
+            responder,
+            inbox,
+            context=memory.as_context,
+            notify=notifications.add,
+        ).start()
+
+    threading.Thread(target=build_and_run, daemon=True).start()
+
+
 def command_serve(args, settings: Settings) -> int:
     from application.scheduling.scheduler import Scheduler
     from infrastructure.connectors import ConnectionStore
+    from infrastructure.email.inbox_store import InboxStore
     from infrastructure.memory import MemoryStore
     from infrastructure.methodologies.technique_repository import TechniqueRepository
     from infrastructure.notifications import NotificationStore
@@ -829,6 +876,9 @@ def command_serve(args, settings: Settings) -> int:
     schedules = ScheduleStore(settings.state_directory / "schedules.json")
     Scheduler(schedules, tasks.queue).start()  # run due schedules on a clock
 
+    inbox = InboxStore(settings.state_directory / "inbox.json")
+    start_inbox_worker(settings, inbox, notifications)  # draft replies, never send
+
     app = ReviewApp(
         service,
         repository,
@@ -842,6 +892,7 @@ def command_serve(args, settings: Settings) -> int:
         memory=MemoryStore(settings.state_directory / "memory.json"),
         schedules=schedules,
         notifications=notifications,
+        inbox=inbox,
     )
 
     httpd = serve(app, host=args.host, port=args.port)

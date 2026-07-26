@@ -28,6 +28,7 @@ from interfaces.web import (
     backlog_pages,
     connections_pages,
     dashboard_pages,
+    email_pages,
     memory_pages,
     methodology_pages,
     notification_pages,
@@ -128,6 +129,7 @@ class ReviewApp:
         memory=None,
         schedules=None,
         notifications=None,
+        inbox=None,
     ) -> None:
         self._service = service
         self._projects = projects
@@ -142,6 +144,7 @@ class ReviewApp:
         self._memory = memory
         self._schedules = schedules
         self._notifications = notifications
+        self._inbox = inbox
 
         self._get_routes = [
             (re.compile(r"^/$"), self._dashboard),
@@ -180,6 +183,7 @@ class ReviewApp:
                 re.compile(r"^/memory/(?P<key>[0-9a-f-]{36})$"),
                 self._memory_edit,
             ),
+            (re.compile(r"^/email$"), self._email_index),
             (re.compile(r"^/tasks$"), self._tasks_index),
             (re.compile(r"^/tasks/new$"), self._new_task),
             (re.compile(r"^/schedules/new$"), self._new_schedule),
@@ -271,6 +275,7 @@ class ReviewApp:
                 re.compile(r"^/tasks/(?P<key>[0-9a-f-]{36})/reply$"),
                 self._reply_task,
             ),
+            (re.compile(r"^/email$"), self._email_configure),
             (re.compile(r"^/notifications/read$"), self._notifications_read),
             (
                 re.compile(r"^/notifications/(?P<key>[0-9a-f-]{36})/read$"),
@@ -497,6 +502,34 @@ class ReviewApp:
     def _notification_read(self, form, key):
         self._require_notifications().mark_read(UUID(key))
         return 303, "/notifications"
+
+    # ------------------------------------------------------------- email
+
+    def _require_inbox(self):
+        if self._inbox is None:
+            raise RuntimeError("This interface has no inbox configured.")
+        return self._inbox
+
+    def _outlook_connected(self) -> bool:
+        return bool(
+            self._connections and "outlook" in self._connections.enabled_keys()
+        )
+
+    def _email_index(self, query):
+        inbox = self._require_inbox()
+        return 200, email_pages.email_page(
+            enabled=inbox.enabled,
+            folder=inbox.folder,
+            connected=self._outlook_connected(),
+            handled=inbox.handled(),
+        )
+
+    def _email_configure(self, form):
+        self._require_inbox().configure(
+            enabled="enabled" in form,
+            folder=form.get("folder", ["Inbox"])[0],
+        )
+        return 303, "/email"
 
     # -------------------------------------------------------- engagements
 
