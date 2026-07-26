@@ -101,6 +101,7 @@ _NAV = (
     ("/engagements", "Engagements", "engagements"),
     ("/tasks", "Tasks", "tasks"),
     ("/email", "Email", "email"),
+    ("/rules", "Rules", "rules"),
     ("/memory", "Memory", "memory"),
     ("/connections", "Connect", "connections"),
     ("/methodologies", "Methodologies", "methodologies"),

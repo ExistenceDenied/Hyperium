@@ -26,7 +26,10 @@ class Ms365MailProvider(MailProvider):
     """
 
     LIST_TOOL = "list-mail-folder-messages"
-    DRAFT_TOOL = "create-draft-email"
+    DRAFT_TOOL = "create-reply-draft"
+    SEND_TOOL = "reply-mail-message"
+    SEND_DRAFT_TOOL = "send-draft-message"
+    ATTACH_TOOL = "add-mail-attachment"
     FOLDERS_TOOL = "list-mail-folders"
     SELECT = "id,subject,from,receivedDateTime,body,bodyPreview"
 
@@ -45,35 +48,74 @@ class Ms365MailProvider(MailProvider):
         self._call = call_tool
         self._limit = limit
 
-    def list_messages(self, folder: str) -> list[EmailMessage]:
-        raw = self._call(
-            self.LIST_TOOL,
-            {
-                "mailFolderId": self._folder_id(folder),
-                "top": self._limit,
-                "select": self.SELECT,
-            },
-        )
-        return [self._to_message(item) for item in self._rows(raw)]
+    def list_messages(self, folder: str, since=None) -> list[EmailMessage]:
+        args = {
+            "mailFolderId": self._folder_id(folder),
+            "top": self._limit,
+            "select": self.SELECT,
+            "orderby": "receivedDateTime desc",
+        }
+        if since is not None:
+            # Only mail newer than the last run — so the worker sees each once.
+            stamp = since.isoformat().replace("+00:00", "Z")
+            args["filter"] = f"receivedDateTime gt {stamp}"
+        rows = self._rows(self._call(self.LIST_TOOL, args))
+        return [self._to_message(item) for item in rows]
 
-    def create_draft_reply(self, message: EmailMessage, body: str) -> None:
-        # create-draft-email takes a single Graph message object under `body`.
-        # contentType is a lowercase enum ('text' | 'html').
-        result = self._call(
-            self.DRAFT_TOOL,
-            {
-                "body": {
-                    "subject": message.reply_subject,
-                    "body": {"contentType": "text", "content": body},
-                    "toRecipients": [
-                        {"emailAddress": {"address": message.sender}}
-                    ],
-                }
-            },
-        )
-        self._raise_on_error(result)
+    def draft_reply(self, message, body, attachments=()) -> None:
+        draft_id = self._create_reply_draft(message, body)
+        self._attach(draft_id, attachments)
+
+    def send_reply(self, message, body, attachments=()) -> None:
+        if attachments:
+            # Attachments must go on a draft first, then the draft is sent.
+            draft_id = self._create_reply_draft(message, body)
+            self._attach(draft_id, attachments)
+            self._raise_on_error(
+                self._call(self.SEND_DRAFT_TOOL, {"messageId": draft_id})
+            )
+        else:
+            self._raise_on_error(
+                self._call(
+                    self.SEND_TOOL,
+                    {"messageId": message.id, "body": {"Comment": body}},
+                )
+            )
 
     # --------------------------------------------------------- internals
+
+    def _create_reply_draft(self, message, body) -> str:
+        # create-reply-draft threads onto the original; returns the new draft.
+        raw = self._call(
+            self.DRAFT_TOOL,
+            {"messageId": message.id, "body": {"Comment": body}},
+        )
+        self._raise_on_error(raw)
+        try:
+            data = json.loads(raw) if isinstance(raw, str) else raw
+            return str(data.get("id", "")) if isinstance(data, dict) else ""
+        except (ValueError, TypeError):
+            return ""
+
+    def _attach(self, message_id: str, attachments) -> None:
+        for name, content in attachments or ():
+            if not message_id:
+                return
+            import base64
+
+            self._raise_on_error(
+                self._call(
+                    self.ATTACH_TOOL,
+                    {
+                        "messageId": message_id,
+                        "body": {
+                            "@odata.type": "#microsoft.graph.fileAttachment",
+                            "name": name,
+                            "contentBytes": base64.b64encode(content).decode("ascii"),
+                        },
+                    },
+                )
+            )
 
     def _raise_on_error(self, raw) -> None:
         # call_tool returns tool errors as text rather than raising; surface

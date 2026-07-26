@@ -27,6 +27,18 @@ class InboxStore:
     def folder(self) -> str:
         return self._read().get("folder", "Inbox")
 
+    @property
+    def last_seen(self) -> datetime | None:
+        """The newest message handled — so a tick only fetches what is newer."""
+        value = self._read().get("last_seen")
+        return datetime.fromisoformat(value) if value else None
+
+    def set_last_seen(self, at: datetime) -> None:
+        with self._lock:
+            data = self._read()
+            data["last_seen"] = at.isoformat()
+            self._write(data)
+
     def configure(self, enabled: bool, folder: str) -> None:
         with self._lock:
             data = self._read()

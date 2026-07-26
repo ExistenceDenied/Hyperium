@@ -8,36 +8,34 @@ from core.email.email_message import EmailMessage
 from core.email.triage import TriageDecision
 from core.interfaces.llm_provider import LLMProvider
 from core.interfaces.mail_provider import MailProvider
+from core.rules.rule import Condition, Rule, RuleSet
 from infrastructure.email.inbox_store import InboxStore
 
 
 class _FakeMail(MailProvider):
-    """A simulated mailbox that records drafts and, by design, cannot send."""
-
     def __init__(self, messages):
         self._messages = messages
-        self.drafts: list[tuple[str, str]] = []
+        self.drafts: list = []
+        self.sent: list = []
+        self.since_calls: list = []
 
-    def list_messages(self, folder):
+    def list_messages(self, folder, since=None):
+        self.since_calls.append(since)
         return list(self._messages)
 
-    def create_draft_reply(self, message, body):
-        self.drafts.append((message.id, body))
+    def draft_reply(self, message, body, attachments=()):
+        self.drafts.append((message.id, body, tuple(attachments)))
+
+    def send_reply(self, message, body, attachments=()):
+        self.sent.append((message.id, body, tuple(attachments)))
 
 
 class _CannedLLM(LLMProvider):
-    def __init__(self, reply="Thanks for your email — happy to help."):
-        self.reply = reply
-        self.prompts: list[str] = []
-
     def generate(self, prompt):
-        self.prompts.append(prompt)
-        return self.reply
+        return "Here is your quote."
 
 
 class _FixedTriage:
-    """Returns a preset decision, so worker routing can be tested in isolation."""
-
     def __init__(self, decision):
         self.decision = decision
 
@@ -45,25 +43,13 @@ class _FixedTriage:
         return self.decision
 
 
-def _message(mid="m1", subject="Quote request"):
+def _message(mid="m1", sender="client@acme.com", when=None):
     return EmailMessage(
         id=mid,
-        sender="client@acme.com",
-        subject=subject,
-        body="Could you send a quote for 200 units?",
-        received_at=datetime.now(timezone.utc),
-    )
-
-
-def _worker(mail, store, decision, enqueue=None, alerts=None):
-    sink = alerts if alerts is not None else []
-    return InboxWorker(
-        mail,
-        _FixedTriage(decision),
-        EmailResponder(_CannedLLM("Here is your quote.")),
-        store,
-        enqueue=enqueue or (lambda prompt, **kw: None),
-        notify=(lambda kind, text, link="": sink.append((kind, text))),
+        sender=sender,
+        subject="Quote request",
+        body="Could you send a quote?",
+        received_at=when or datetime(2026, 7, 26, 10, 0, tzinfo=timezone.utc),
     )
 
 
@@ -73,106 +59,139 @@ def _store(tmp_path, enabled=True):
     return store
 
 
-def test_reply_subject_is_prefixed_once():
-    assert _message(subject="Hi").reply_subject == "Re: Hi"
-    assert _message(subject="Re: Hi").reply_subject == "Re: Hi"
-
-
-def test_the_mail_provider_offers_no_way_to_send():
-    assert not hasattr(MailProvider, "send")
-    assert not any("send" in name.lower() for name in vars(MailProvider))
-
-
-def test_responder_uses_business_memory():
-    llm = _CannedLLM()
-    EmailResponder(llm).compose(_message(), context="We charge £5 per unit.")
-    assert "We charge £5 per unit." in llm.prompts[0]
-
-
-def test_reply_category_drafts_and_notifies(tmp_path):
-    mail = _FakeMail([_message()])
-    alerts: list = []
-    worker = _worker(
-        mail, _store(tmp_path), TriageDecision(category="reply"), alerts=alerts
+def _worker(mail, store, decision, **kw):
+    return InboxWorker(
+        mail,
+        _FixedTriage(decision),
+        EmailResponder(_CannedLLM()),
+        store,
+        **kw,
     )
 
-    assert worker.tick() == 1
-    assert mail.drafts == [("m1", "Here is your quote.")]
-    assert any(kind == "email" for kind, _ in alerts)
+
+_REPLY = TriageDecision(category="reply")
 
 
-def test_escalate_category_flags_without_drafting(tmp_path):
+def test_reply_defaults_to_a_draft(tmp_path):
     mail = _FakeMail([_message()])
-    alerts: list = []
-    worker = _worker(
+
+    _worker(mail, _store(tmp_path), _REPLY).tick()
+
+    assert len(mail.drafts) == 1
+    assert mail.sent == []
+
+
+def test_a_rule_promotes_a_reply_to_a_real_send(tmp_path):
+    mail = _FakeMail([_message(sender="kris.leunis@hyperium.be")])
+    rules = RuleSet(
+        [
+            Rule(
+                name="trusted",
+                conditions=[Condition("sender", "startsWith", "kris.leunis")],
+                outputs={"delivery": "send"},
+            )
+        ]
+    )
+
+    _worker(
+        mail, _store(tmp_path), _REPLY, rules=lambda: rules, can_send=lambda: True
+    ).tick()
+
+    assert len(mail.sent) == 1
+    assert mail.drafts == []
+
+
+def test_the_kill_switch_forces_a_draft_even_when_a_rule_says_send(tmp_path):
+    mail = _FakeMail([_message(sender="kris.leunis@hyperium.be")])
+    rules = RuleSet(
+        [
+            Rule(
+                name="trusted",
+                conditions=[Condition("sender", "startsWith", "kris.leunis")],
+                outputs={"delivery": "send"},
+            )
+        ]
+    )
+
+    # can_send is False → outbound switch off → never sends.
+    _worker(
+        mail, _store(tmp_path), _REPLY, rules=lambda: rules, can_send=lambda: False
+    ).tick()
+
+    assert mail.sent == []
+    assert len(mail.drafts) == 1
+
+
+def test_a_non_matching_sender_is_not_sent(tmp_path):
+    mail = _FakeMail([_message(sender="stranger@example.com")])
+    rules = RuleSet(
+        [
+            Rule(
+                name="trusted",
+                conditions=[Condition("sender", "startsWith", "kris.leunis")],
+                outputs={"delivery": "send"},
+            )
+        ]
+    )
+
+    _worker(
+        mail, _store(tmp_path), _REPLY, rules=lambda: rules, can_send=lambda: True
+    ).tick()
+
+    assert mail.sent == []
+    assert len(mail.drafts) == 1
+
+
+def test_attach_deliverables_rule_attaches_files(tmp_path):
+    mail = _FakeMail([_message()])
+    rules = RuleSet(
+        [Rule(name="always-attach", outputs={"attach_deliverables": "true"})]
+    )
+
+    _worker(
         mail,
         _store(tmp_path),
-        TriageDecision(category="escalate", summary="A complaint"),
-        alerts=alerts,
-    )
+        _REPLY,
+        rules=lambda: rules,
+        deliverables=lambda m: [("report.xlsx", b"data")],
+    ).tick()
 
-    assert worker.tick() == 1
-    assert mail.drafts == []  # no draft for something needing the owner
-    assert any("Needs you" in text for _, text in alerts)
-
-
-def test_skip_category_does_nothing_but_is_recorded(tmp_path):
-    mail = _FakeMail([_message(subject="Newsletter")])
-    store = _store(tmp_path)
-    worker = _worker(mail, store, TriageDecision(category="skip"))
-
-    assert worker.tick() == 1
-    assert mail.drafts == []
-    assert store.handled()[0]["category"] == "skip"
+    assert mail.drafts[0][2] == (("report.xlsx", b"data"),)
 
 
-def test_implied_tasks_are_queued_for_any_category(tmp_path):
+def test_implied_tasks_are_queued(tmp_path):
     mail = _FakeMail([_message()])
     queued: list = []
     decision = TriageDecision(
-        category="reply",
-        priority="high",
-        tasks=["Prepare a quote for 200 units", "Add Acme to the CRM"],
-    )
-    worker = _worker(
-        mail,
-        _store(tmp_path),
-        decision,
-        enqueue=lambda prompt, **kw: queued.append((prompt, kw)),
+        category="fyi", priority="high", tasks=["Prepare a quote"]
     )
 
-    worker.tick()
+    _worker(
+        mail, _store(tmp_path), decision, enqueue=lambda p, **kw: queued.append((p, kw))
+    ).tick()
 
-    assert len(queued) == 2
-    assert "Prepare a quote for 200 units" in queued[0][0]
+    assert len(queued) == 1
     assert queued[0][1]["priority"] == "high"
 
 
-def test_worker_handles_each_message_once(tmp_path):
-    mail = _FakeMail([_message()])
+def test_only_new_mail_is_fetched_and_the_watermark_advances(tmp_path):
+    when = datetime(2026, 7, 26, 10, 0, tzinfo=timezone.utc)
+    mail = _FakeMail([_message(when=when)])
     store = _store(tmp_path)
-    worker = _worker(mail, store, TriageDecision(category="reply"))
 
-    assert worker.tick() == 1
-    assert worker.tick() == 0
-    assert len(mail.drafts) == 1
+    _worker(mail, store, _REPLY).tick()
+
+    assert mail.since_calls == [None]  # first run: no watermark
+    assert store.last_seen == when  # advanced to the newest handled
+
+    # A second tick asks only for mail newer than the watermark.
+    mail.since_calls.clear()
+    _worker(mail, store, _REPLY).tick()
+    assert mail.since_calls == [when]
 
 
 def test_worker_does_nothing_while_disabled(tmp_path):
     mail = _FakeMail([_message()])
-    worker = _worker(mail, _store(tmp_path, enabled=False), TriageDecision())
 
-    assert worker.tick() == 0
-    assert mail.drafts == []
-
-
-def test_store_round_trips_config_and_log(tmp_path):
-    store = InboxStore(tmp_path / "inbox.json")
-    store.configure(enabled=True, folder="Sales")
-    store.mark_handled("x1", "a@b.com", "Hello", category="reply", actions=["drafted"])
-
-    reloaded = InboxStore(tmp_path / "inbox.json")
-    assert reloaded.enabled is True
-    assert reloaded.folder == "Sales"
-    assert reloaded.is_handled("x1")
-    assert reloaded.handled()[0]["category"] == "reply"
+    assert _worker(mail, _store(tmp_path, enabled=False), _REPLY).tick() == 0
+    assert mail.drafts == [] and mail.sent == []

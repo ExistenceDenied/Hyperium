@@ -33,6 +33,7 @@ from interfaces.web import (
     methodology_pages,
     notification_pages,
     pages,
+    rules_pages,
     search_pages,
     task_pages,
     techniques_pages,
@@ -132,6 +133,7 @@ class ReviewApp:
         schedules=None,
         notifications=None,
         inbox=None,
+        rules=None,
         verify_connector=None,
     ) -> None:
         self._service = service
@@ -148,6 +150,7 @@ class ReviewApp:
         self._schedules = schedules
         self._notifications = notifications
         self._inbox = inbox
+        self._rules = rules
         self._verify_connector = verify_connector
 
         self._get_routes = [
@@ -189,6 +192,7 @@ class ReviewApp:
                 self._memory_edit,
             ),
             (re.compile(r"^/email$"), self._email_index),
+            (re.compile(r"^/rules$"), self._rules_index),
             (re.compile(r"^/tasks$"), self._tasks_index),
             (re.compile(r"^/tasks/new$"), self._new_task),
             (re.compile(r"^/schedules/new$"), self._new_schedule),
@@ -281,6 +285,10 @@ class ReviewApp:
                 self._reply_task,
             ),
             (re.compile(r"^/email$"), self._email_configure),
+            (re.compile(r"^/rules$"), self._create_rule),
+            (re.compile(r"^/rules/sending$"), self._toggle_sending),
+            (re.compile(r"^/rules/(?P<key>[0-9a-f-]{36})/delete$"), self._delete_rule),
+            (re.compile(r"^/rules/(?P<key>[0-9a-f-]{36})/toggle$"), self._toggle_rule),
             (re.compile(r"^/notifications/read$"), self._notifications_read),
             (
                 re.compile(r"^/notifications/(?P<key>[0-9a-f-]{36})/read$"),
@@ -555,6 +563,58 @@ class ReviewApp:
             folder=form.get("folder", ["Inbox"])[0],
         )
         return 303, "/email"
+
+    # ------------------------------------------------------------- rules
+
+    def _require_rules(self):
+        if self._rules is None:
+            raise RuntimeError("This interface has no rule store.")
+        return self._rules
+
+    def _rules_index(self, query):
+        store = self._require_rules()
+        return 200, rules_pages.rules_index(store.list(), store.sending_enabled)
+
+    def _create_rule(self, form):
+        from core.rules.rule import Condition
+
+        name = form.get("name", [""])[0].strip()
+        if not name:
+            return 400, error_page("A rule needs a name.", code=400)
+
+        op = form.get("op", ["any"])[0]
+        value = form.get("value", [""])[0].strip()
+        conditions = []
+        if op != "any" and value:
+            conditions.append(
+                Condition(input=form.get("input", ["sender"])[0], op=op, value=value)
+            )
+
+        outputs = {}
+        delivery = form.get("delivery", [""])[0].strip()
+        if delivery in ("draft", "send"):
+            outputs["delivery"] = delivery
+        if "attach_deliverables" in form:
+            outputs["attach_deliverables"] = "true"
+
+        self._require_rules().add(name, conditions, outputs)
+        return 303, "/rules"
+
+    def _toggle_sending(self, form):
+        store = self._require_rules()
+        store.set_sending_enabled(not store.sending_enabled)
+        return 303, "/rules"
+
+    def _delete_rule(self, form, key):
+        self._require_rules().delete(UUID(key))
+        return 303, "/rules"
+
+    def _toggle_rule(self, form, key):
+        store = self._require_rules()
+        rule = next((r for r in store.list() if r.id == UUID(key)), None)
+        if rule is not None:
+            store.set_enabled(UUID(key), not rule.enabled)
+        return 303, "/rules"
 
     # -------------------------------------------------------- engagements
 

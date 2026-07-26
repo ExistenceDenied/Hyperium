@@ -844,8 +844,11 @@ def start_inbox_worker(settings: Settings, inbox, notifications, enqueue) -> Non
             )
             return
 
+        from infrastructure.rules_store import RuleStore
+
         provider = Ms365MailProvider(client.call_tool)
         memory = MemoryStore(settings.state_directory / "memory.json")
+        rules = RuleStore(settings.state_directory / "rules.json")
         # Triage judges in JSON mode; the responder writes the actual reply.
         triage = EmailTriage(build_llm(settings, settings.review_model or None,
                                        json_mode=True))
@@ -856,6 +859,8 @@ def start_inbox_worker(settings: Settings, inbox, notifications, enqueue) -> Non
             responder,
             inbox,
             enqueue=enqueue,
+            rules=rules.rule_set,
+            can_send=lambda: rules.sending_enabled,
             context=memory.as_context,
             notify=notifications.add,
         ).start()
@@ -870,6 +875,7 @@ def command_serve(args, settings: Settings) -> int:
     from infrastructure.memory import MemoryStore
     from infrastructure.methodologies.technique_repository import TechniqueRepository
     from infrastructure.notifications import NotificationStore
+    from infrastructure.rules_store import RuleStore
     from infrastructure.scheduling import ScheduleStore
     from interfaces.web.server import ReviewApp, serve
 
@@ -884,7 +890,8 @@ def command_serve(args, settings: Settings) -> int:
     Scheduler(schedules, tasks.queue).start()  # run due schedules on a clock
 
     inbox = InboxStore(settings.state_directory / "inbox.json")
-    # Triage the folder, draft replies (never send), and queue implied work.
+    rules = RuleStore(settings.state_directory / "rules.json")
+    # Triage the folder, apply rules (draft unless a rule sends), queue work.
     start_inbox_worker(settings, inbox, notifications, tasks.queue)
 
     app = ReviewApp(
@@ -901,6 +908,7 @@ def command_serve(args, settings: Settings) -> int:
         schedules=schedules,
         notifications=notifications,
         inbox=inbox,
+        rules=rules,
     )
 
     httpd = serve(app, host=args.host, port=args.port)
