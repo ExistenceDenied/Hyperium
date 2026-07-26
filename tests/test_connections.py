@@ -130,6 +130,19 @@ def test_the_connect_page_carries_the_wizard_and_field_specs(tmp_path):
 
     _, body = app.get("/connections", {})
 
-    assert "openWizard(" in body  # the modal is wired
+    assert "data-connect='outlook'" in body  # buttons are wired for the modal
+    assert "id='connectors-data'" in body  # data passed as a JSON block
+    assert "src='/app.js'" in body  # behaviour loaded from the served script
     assert "XERO_CLIENT_ID" not in body  # secrets' env names are not leaked
-    assert '"auth": "device"' in body or '"auth":"device"' in body
+    assert '"auth": "device"' in body
+
+
+def test_app_js_is_served_inline_with_a_script_type(tmp_path):
+    app = ReviewApp(service=None, projects=None)
+
+    code, body = app.get("/app.js", {})
+
+    assert code == 200
+    assert body.media_type.startswith("application/javascript")
+    assert body.inline is True
+    assert "openWizard" in body.content and "alert-badge" in body.content

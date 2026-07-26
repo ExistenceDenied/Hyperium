@@ -108,44 +108,10 @@ _NAV = (
     ("/notifications", "Alerts", "notifications"),
 )
 
-# Keeps the Alerts badge current and raises a desktop notification for anything
-# new, so work the system does while you are away actually reaches you. It polls
-# a tiny JSON endpoint; ids already seen are remembered so an alert pings once.
-_ALERTS_SCRIPT = """
-<script>
-(function () {
-  var badge = document.getElementById('alert-badge');
-  if (!('Notification' in window)) { /* badge still works */ }
-  else if (Notification.permission === 'default') { Notification.requestPermission(); }
-  var seen;
-  try { seen = JSON.parse(localStorage.getItem('seenAlerts') || '[]'); }
-  catch (e) { seen = []; }
-  function poll() {
-    fetch('/notifications/unread.json').then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (badge) {
-          if (data.count > 0) {
-            badge.textContent = data.count;
-            badge.style.display = '';
-          } else { badge.style.display = 'none'; }
-        }
-        (data.items || []).forEach(function (item) {
-          if (seen.indexOf(item.id) !== -1) return;
-          seen.push(item.id);
-          if ('Notification' in window && Notification.permission === 'granted') {
-            var n = new Notification('Hyperium', { body: item.text });
-            n.onclick = function () { if (item.link) window.location = item.link; };
-          }
-        });
-        try { localStorage.setItem('seenAlerts', JSON.stringify(seen.slice(-200))); }
-        catch (e) {}
-      }).catch(function () {});
-  }
-  poll();
-  setInterval(poll, 15000);
-})();
-</script>
-"""
+# All first-party behaviour (the Alerts badge poll, the connection wizard) lives
+# in this served file rather than inline, because the page's strict CSP forbids
+# inline scripts. Loaded at the end of every page.
+_APP_SCRIPT = "<script src='/app.js'></script>"
 
 
 def esc(value) -> str:
@@ -177,7 +143,7 @@ def page(title: str, body: str, refresh: bool = False, section: str = "") -> str
         "<input type='search' name='q' placeholder='Search…' "
         "aria-label='Search'></form>"
         "</div></header>"
-        f"<div class='wrap'>{body}</div>{_ALERTS_SCRIPT}</body></html>"
+        f"<div class='wrap'>{body}</div>{_APP_SCRIPT}</body></html>"
     )
 
 

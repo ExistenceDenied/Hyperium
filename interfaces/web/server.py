@@ -50,6 +50,8 @@ class Download:
     content: str | bytes
     filename: str
     media_type: str = "text/markdown; charset=utf-8"
+    #: Serve for display in the page (e.g. a script), not as an attachment.
+    inline: bool = False
 
 # Errors that are the caller's fault rather than a bug: shown, not raised.
 EXPECTED = (ValueError, KeyError, FileNotFoundError, RuntimeError)
@@ -150,6 +152,7 @@ class ReviewApp:
 
         self._get_routes = [
             (re.compile(r"^/$"), self._dashboard),
+            (re.compile(r"^/app\.js$"), self._app_js),
             (re.compile(r"^/search$"), self._search),
             (re.compile(r"^/engagements$"), self._engagements),
             (re.compile(r"^/notifications$"), self._notifications_index),
@@ -365,6 +368,18 @@ class ReviewApp:
                     return code, error_page(str(error), code=code)
 
         return 404, error_page(f"Unknown path '{path}'.")
+
+    # ------------------------------------------------------------ assets
+
+    def _app_js(self, query):
+        from interfaces.web.assets import APP_JS
+
+        return 200, Download(
+            APP_JS,
+            "app.js",
+            media_type="application/javascript; charset=utf-8",
+            inline=True,
+        )
 
     # --------------------------------------------------------- dashboard
 
@@ -1285,10 +1300,11 @@ def build_handler(app: ReviewApp):
                 self.send_response(status)
                 self.send_header("Content-Type", body.media_type)
                 self.send_header("Content-Length", str(len(payload)))
-                self.send_header(
-                    "Content-Disposition",
-                    f'attachment; filename="{body.filename}"',
-                )
+                if not body.inline:
+                    self.send_header(
+                        "Content-Disposition",
+                        f'attachment; filename="{body.filename}"',
+                    )
                 self.send_header("X-Content-Type-Options", "nosniff")
                 self.end_headers()
                 self.wfile.write(payload)
@@ -1303,8 +1319,12 @@ def build_handler(app: ReviewApp):
             self.send_header("Referrer-Policy", "same-origin")
             self.send_header(
                 "Content-Security-Policy",
-                "default-src 'none'; style-src 'unsafe-inline'; "
-                "form-action 'self'; frame-ancestors 'none'",
+                # Scripts only from this origin (a served /app.js file, never
+                # inline), and fetch only back to this origin. Inline styles
+                # stay allowed; everything else is denied.
+                "default-src 'none'; script-src 'self'; connect-src 'self'; "
+                "style-src 'unsafe-inline'; form-action 'self'; "
+                "frame-ancestors 'none'",
             )
             self.end_headers()
             self.wfile.write(payload)

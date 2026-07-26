@@ -6,6 +6,10 @@ a short wizard that collects whatever the connector needs, starts it, and
 verifies it by listing its tools — so "Connected" means genuinely working, not
 merely registered. A service's own sign-in happens inside the connector;
 Hyperium never sees the password.
+
+The wizard's behaviour lives in the served /app.js (the page's CSP forbids
+inline scripts). This page only supplies the markup, the connector data as a
+non-executable JSON block, and buttons tagged with data-connect for it to wire.
 """
 
 from __future__ import annotations
@@ -20,7 +24,6 @@ def _specs(presets) -> str:
         preset.key: {
             "name": preset.name,
             "auth": preset.auth,
-            "command": preset.command,
             "fields": [
                 {
                     "key": field.key,
@@ -33,7 +36,9 @@ def _specs(presets) -> str:
         }
         for preset in presets
     }
-    return json.dumps(data)
+    # Rendered inside a <script type="application/json"> block, so close any
+    # accidental </script> in the data rather than trusting it not to appear.
+    return json.dumps(data).replace("</", "<\\/")
 
 
 def connections_index(presets, enabled_keys) -> str:
@@ -49,26 +54,25 @@ def connections_index(presets, enabled_keys) -> str:
             else "<span class='pill draft'>Not connected</span>"
         )
 
-        if connected:
-            action = (
-                f"<button class='btn' type='button' "
-                f"onclick=\"openWizard('{esc(preset.key)}')\">Reconnect</button> "
-                f"<form method='post' style='display:inline;margin:0' "
-                f"action='/connections/{esc(preset.key)}/disconnect'>"
-                "<button class='danger' type='submit'>Disconnect</button></form>"
-            )
-        else:
-            action = (
-                f"<button class='primary' type='button' "
-                f"onclick=\"openWizard('{esc(preset.key)}')\">Connect</button>"
-            )
+        connect = (
+            f"<button class='primary' type='button' "
+            f"data-connect='{esc(preset.key)}'>"
+            f"{'Reconnect' if connected else 'Connect'}</button>"
+        )
+        disconnect = (
+            "<form method='post' style='display:inline;margin:0' "
+            f"action='/connections/{esc(preset.key)}/disconnect'>"
+            "<button class='danger' type='submit'>Disconnect</button></form>"
+            if connected
+            else ""
+        )
 
         cards.append(
             "<div class='card'>"
             f"<div class='row'><strong>{esc(preset.name)}</strong>{pill}</div>"
             f"<p class='muted' style='margin:6px 0'>{esc(preset.description)}</p>"
             f"<p class='small muted'>{esc(preset.setup)}</p>"
-            f"<div class='actions'>{action}</div></div>"
+            f"<div class='actions'>{connect}{disconnect}</div></div>"
         )
 
     body = (
@@ -78,18 +82,18 @@ def connections_index(presets, enabled_keys) -> str:
         "shown to Hyperium) and checks it works. Anything that sends or changes "
         "data is later held for your approval.</p>" + "".join(cards)
         + _WIZARD
-        + f"<script>const CONNECTORS = {_specs(presets)};{_SCRIPT}</script>"
+        + f"<script type='application/json' id='connectors-data'>{_specs(presets)}"
+        "</script>"
     )
 
     return page("Connections", body, section="connections")
 
 
 _WIZARD = """
-<div id="wiz-backdrop" class="wiz-backdrop"
-  onclick="if(event.target===this)closeWizard()">
+<div id="wiz-backdrop" class="wiz-backdrop">
   <div class="wiz" role="dialog" aria-modal="true">
     <div class="row"><h2 id="wiz-title" style="margin:0">Connect</h2>
-      <button class="btn" type="button" onclick="closeWizard()">Close</button></div>
+      <button id="wiz-close" class="btn" type="button">Close</button></div>
     <div id="wiz-body"></div>
     <div id="wiz-status" class="small muted" style="margin-top:10px"></div>
     <div id="wiz-actions" class="actions"></div>
@@ -106,87 +110,4 @@ _WIZARD = """
   border-radius:8px; display:inline-block; margin:6px 0; }
 .wiz-spinner { color:var(--warn); }
 </style>
-"""
-
-_SCRIPT = r"""
-let WIZ = null;
-function el(id){ return document.getElementById(id); }
-function openWizard(key){
-  WIZ = { key: key, conf: CONNECTORS[key] };
-  el('wiz-title').textContent = 'Connect ' + WIZ.conf.name;
-  el('wiz-status').textContent = '';
-  const body = el('wiz-body'), actions = el('wiz-actions');
-  body.innerHTML = ''; actions.innerHTML = '';
-  const fields = WIZ.conf.fields || [];
-  fields.forEach(function(f){
-    const type = f.kind === 'secret' ? 'password' : 'text';
-    body.insertAdjacentHTML('beforeend',
-      "<label>" + f.label + "<input data-k='" + f.key + "' type='" + type +
-      "' placeholder='" + (f.placeholder || '') + "'></label>");
-  });
-  if (WIZ.conf.auth === 'oauth') {
-    body.insertAdjacentHTML('beforeend',
-      "<p class='muted small'>A browser window will open for you to sign in. " +
-      "Approve access, then this will verify the connection.</p>");
-  }
-  if (WIZ.conf.auth === 'device') {
-    body.insertAdjacentHTML('beforeend',
-      "<p class='muted small'>You'll get a short code to enter at a Microsoft " +
-      "sign-in page in your browser.</p>");
-    addButton(actions, 'Start sign-in', startDeviceLogin);
-  } else {
-    addButton(actions, 'Connect', doConnect);
-  }
-  el('wiz-backdrop').classList.add('open');
-}
-function closeWizard(){ el('wiz-backdrop').classList.remove('open'); }
-function addButton(host, label, fn, kind){
-  const b = document.createElement('button');
-  b.type = 'button'; b.textContent = label; b.className = kind || 'primary';
-  b.onclick = fn; host.appendChild(b);
-}
-function values(){
-  const out = new URLSearchParams();
-  document.querySelectorAll('#wiz-body input[data-k]').forEach(function(i){
-    out.append(i.getAttribute('data-k'), i.value);
-  });
-  return out;
-}
-function post(url, body){
-  return fetch(url, { method:'POST',
-    headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body: body }).then(function(r){ return r.json(); });
-}
-function busy(msg){ const s = el('wiz-status');
-  s.className='small wiz-spinner'; s.textContent = msg; }
-function done(res){ const s = el('wiz-status');
-  s.className = 'small ' + (res.ok ? '' : 'wiz-spinner');
-  s.textContent = res.message || (res.ok ? 'Connected.' : 'Not connected.');
-  if (res.ok) setTimeout(function(){ location.reload(); }, 1200);
-}
-function doConnect(){
-  busy('Establishing and verifying… (a first run can download the connector)');
-  post('/connections/' + WIZ.key + '/connect', values()).then(done)
-    .catch(function(){ done({ok:false, message:'The connection attempt failed.'}); });
-}
-function verify(){
-  busy('Verifying…');
-  post('/connections/' + WIZ.key + '/verify', new URLSearchParams()).then(done)
-    .catch(function(){ done({ok:false, message:'Verification failed.'}); });
-}
-function startDeviceLogin(){
-  busy('Starting sign-in…');
-  post('/connections/' + WIZ.key + '/login', values()).then(function(res){
-    const body = el('wiz-body');
-    if (res.ok && res.code) {
-      body.insertAdjacentHTML('beforeend',
-        "<p style='margin-top:12px'>Go to <a href='" + res.url + "' target='_blank'>"
-        + res.url + "</a> and enter:</p><div class='code'>" + res.code + "</div>");
-    }
-    el('wiz-status').className = 'small muted';
-    el('wiz-status').textContent = res.message || '';
-    const actions = el('wiz-actions'); actions.innerHTML = '';
-    addButton(actions, "I've signed in — Verify", verify);
-  }).catch(function(){ done({ok:false, message:'Could not start sign-in.'}); });
-}
 """
