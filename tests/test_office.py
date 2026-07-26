@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import io
 
-from infrastructure.methodologies.json_methodology_repository import (
+import pytest
+
+# Word/PowerPoint output is an optional extra; CI installs only `dev`. Skip
+# rather than fail when the office deps are absent.
+pytest.importorskip("docx")
+pytest.importorskip("pptx")
+
+from infrastructure.methodologies.json_methodology_repository import (  # noqa: E402
     JsonMethodologyRepository,
 )
-from interfaces.office import parse_blocks, to_docx, to_eml, to_pptx
+from interfaces.office import parse_blocks, to_docx, to_eml, to_pptx  # noqa: E402
 
 SAMPLE = """# Report Title
 

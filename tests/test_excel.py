@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from infrastructure.tools.excel_tools import (
+import pytest
+
+# Excel output is an optional extra; CI installs only `dev`. Skip rather than
+# fail when openpyxl is absent, keeping the unit suite runnable without it.
+pytest.importorskip("openpyxl")
+
+from infrastructure.tools.excel_tools import (  # noqa: E402
     ReadExcelTool,
     UpdateExcelCellTool,
     WriteExcelTool,
