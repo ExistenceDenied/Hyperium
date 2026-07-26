@@ -15,8 +15,10 @@ class WritePowerPointTool(Tool):
         "Create a PowerPoint (.pptx) deck and save it. Give the deck content as "
         "Markdown: each '## Heading' starts a new slide and the lines under it "
         "become that slide's bullets; a line beginning 'Note:' becomes a speaker "
-        "note. Use this to actually deliver a presentation — do not say you "
-        "cannot make one."
+        "note. Write a real, substantive deck — 6-10 slides that tell a story "
+        "(context, findings, analysis, recommendation, next steps), each with "
+        "3-6 specific, informative bullets and concrete detail, not one-liners "
+        "or placeholders. Use this to actually deliver a presentation."
     )
     parameters = {
         "type": "object",
@@ -55,7 +57,9 @@ class WriteWordTool(Tool):
     description = (
         "Create a Word (.docx) document and save it. Give the content as "
         "Markdown — headings, paragraphs, bullet and numbered lists and tables "
-        "all come through as real Word formatting. Use this to deliver a "
+        "all come through as real Word formatting. Write substantive, specific "
+        "content in full paragraphs with a logical structure and concrete "
+        "detail — not a thin outline or placeholders. Use this to deliver a "
         "report, proposal or letter as a Word file."
     )
     parameters = {
