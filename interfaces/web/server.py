@@ -251,6 +251,10 @@ class ReviewApp:
                 self._add_note,
             ),
             (
+                re.compile(r"^/tasks/(?P<key>[0-9a-f-]{36})/improve$"),
+                self._improve_task,
+            ),
+            (
                 re.compile(r"^/connections/(?P<key>[\w-]+)/connect$"),
                 self._connect,
             ),
@@ -468,11 +472,12 @@ class ReviewApp:
             prompt = (fields.get("prompt") or "").strip()
             if not prompt:
                 return 400, error_page("A task needs a prompt.", code=400)
-            priority = (fields.get("priority") or "medium").strip()
-            task_id = self._require_tasks().start(
+            tasks = self._require_tasks()
+            launch = tasks.queue if "queue" in fields else tasks.start
+            task_id = launch(
                 prompt,
                 uploads=files,
-                priority=priority,
+                priority=(fields.get("priority") or "medium").strip(),
                 technique=(fields.get("technique") or "").strip(),
                 methodology=(fields.get("methodology") or "").strip(),
             )
@@ -525,6 +530,10 @@ class ReviewApp:
         )
 
         return 303, f"/tasks/{task_id}"
+
+    def _improve_task(self, form, key):
+        self._require_tasks().suggest_improvements(UUID(key))
+        return 303, f"/tasks/{key}"
 
     def _add_note(self, form, key):
         note = form.get("note", [""])[0].strip()

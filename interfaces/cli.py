@@ -724,6 +724,7 @@ def command_submit(args, settings: Settings) -> int:
 def build_web_task_runner(settings: Settings):
     """The browser's task runner: agent runs with web-mediated approval."""
     from application.agent.agent_runner import AgentRunner
+    from application.review.task_reviewer import TaskReviewer
     from infrastructure.connectors import ConnectionStore
     from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
     from infrastructure.mcp.mcp_client import McpClient
@@ -738,6 +739,9 @@ def build_web_task_runner(settings: Settings):
     techniques = TechniqueRepository(BUILTIN_ROOT / "techniques")
     methodologies = build_methodologies(settings)
     memory = MemoryStore(settings.state_directory / "memory.json")
+    task_reviewer = TaskReviewer(
+        build_llm(settings, settings.review_model or None, json_mode=True)
+    )
 
     def approach(technique_key, methodology_key):
         parts = []
@@ -801,6 +805,7 @@ def build_web_task_runner(settings: Settings):
         workspace=settings.workspace,
         approach=approach,
         context=memory.as_context,
+        reviewer=task_reviewer.review,
     )
 
 
@@ -812,13 +817,16 @@ def command_serve(args, settings: Settings) -> int:
 
     service, repository = build_context(settings)
 
+    tasks = build_web_task_runner(settings)
+    tasks.start_worker()  # continuously launch queued tasks in the background
+
     app = ReviewApp(
         service,
         repository,
         missions=build_backlog(settings),
         methodologies=build_methodologies(settings),
         resources=lambda: [default_resource(settings)],
-        tasks=build_web_task_runner(settings),
+        tasks=tasks,
         connections=ConnectionStore(settings.state_directory / "connections.json"),
         workspace=settings.workspace,
         techniques=TechniqueRepository(BUILTIN_ROOT / "techniques"),

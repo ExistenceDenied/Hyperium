@@ -48,14 +48,16 @@ class TaskRecord:
     #: follow — its guidance and template shape how the agent works.
     technique: str = ""
     methodology: str = ""
+    #: True while the task is in the queue, waiting for the worker to launch it.
+    queued: bool = False
 
     @property
     def status(self) -> str:
-        """Derived from the run's outcome; 'pending' until it has one."""
-        if self.result is None:
-            return "pending"
+        """queued → running elsewhere; its outcome once it has one."""
+        if self.result is not None:
+            return self.result.stop_reason.value
 
-        return self.result.stop_reason.value
+        return "queued" if self.queued else "pending"
 
     @property
     def acted(self) -> bool:

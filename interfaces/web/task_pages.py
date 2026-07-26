@@ -12,6 +12,8 @@ from interfaces.web.layout import esc, page
 from interfaces.web.markdown import render
 
 _STATUS_PILL = {
+    "queued": "draft",
+    "pending": "draft",
     "running": "await",
     "awaiting approval": "await",
     "completed": "ok",
@@ -132,6 +134,9 @@ def new_task(techniques=(), methodologies=()) -> str:
         + "</select></label>"
         "<label>Attach files (optional)"
         "<input type='file' name='files' multiple></label>"
+        "<label style='display:flex;gap:8px;font-weight:400;margin-top:10px'>"
+        "<input type='checkbox' name='queue' value='1' style='width:auto'> "
+        "Add to the queue instead of starting now</label>"
         "<div class='actions'><button class='primary' type='submit'>"
         "Start</button>"
         "<a class='btn' href='/tasks'>Cancel</a></div>"
@@ -267,6 +272,13 @@ def task_detail(view) -> str:
     if view.output:
         parts.append("<h3>Result</h3>")
         parts.append(f"<div class='card doc'>{render(view.output)}</div>")
+
+    if view.status == "completed":
+        parts.append(
+            f"<form method='post' action='/tasks/{view.id}/improve' "
+            "style='margin-top:12px'><button type='submit'>"
+            "Suggest improvement tasks</button></form>"
+        )
 
     parts.append(_notes(view))
     parts.append(_steps(view))

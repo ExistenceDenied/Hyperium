@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -115,6 +116,8 @@ class WebTaskRunner:
         workspace,
         approach=None,
         context=None,
+        reviewer=None,
+        max_concurrent=1,
     ) -> None:
         self._build_runner = build_runner
         self._repository = repository
@@ -125,6 +128,9 @@ class WebTaskRunner:
         self._approach = approach or (lambda technique, methodology: "")
         # context() -> the business memory prepended to every task.
         self._context = context or (lambda: "")
+        # reviewer(prompt, output) -> [improvement task descriptions].
+        self._reviewer = reviewer
+        self._max_concurrent = max_concurrent
         self._runs: dict[UUID, _Run] = {}
         self._lock = threading.Lock()
 
@@ -180,6 +186,100 @@ class WebTaskRunner:
 
         return task_id
 
+    def queue(
+        self,
+        prompt: str,
+        uploads=None,
+        priority: str = "medium",
+        technique: str = "",
+        methodology: str = "",
+    ) -> UUID:
+        """Add a task to the queue for the worker to launch, rather than now."""
+        task_id = uuid4()
+        self.folder(task_id).mkdir(parents=True, exist_ok=True)
+        if uploads:
+            self.save_uploads(task_id, uploads)
+
+        self._repository.save(
+            TaskRecord(
+                id=task_id,
+                prompt=prompt,
+                model=self._model,
+                priority=priority,
+                technique=technique,
+                methodology=methodology,
+                queued=True,
+            )
+        )
+        return task_id
+
+    def pump(self) -> None:
+        """Launch queued tasks while there is capacity — the worker's tick."""
+        with self._lock:
+            running = sum(
+                1
+                for run in self._runs.values()
+                if run.result is None and run.error is None
+            )
+
+        if running >= self._max_concurrent:
+            return
+
+        order = {"high": 0, "medium": 1, "low": 2}
+        queued = sorted(
+            (
+                record
+                for record in self._repository.list()
+                if record.queued and record.id not in self._runs
+            ),
+            key=lambda record: (order.get(record.priority, 1), record.created_at),
+        )
+
+        for record in queued:
+            if running >= self._max_concurrent:
+                break
+            self.start(
+                record.prompt,
+                task_id=record.id,
+                priority=record.priority,
+                technique=record.technique,
+                methodology=record.methodology,
+            )
+            running += 1
+
+    def start_worker(self, interval: float = 5.0) -> None:
+        """Continuously check the queue and launch tasks when capacity allows."""
+
+        def loop():
+            while True:
+                try:
+                    self.pump()
+                except Exception:
+                    logger.exception("Task queue worker failed a pass.")
+                time.sleep(interval)
+
+        threading.Thread(target=loop, daemon=True).start()
+
+    def suggest_improvements(self, task_id: UUID) -> None:
+        """Have a reviewer read a finished task and queue improvement tasks."""
+        if self._reviewer is None:
+            return
+
+        def work():
+            view = self.view(task_id)
+            if view is None or not view.output:
+                return
+            try:
+                suggestions = self._reviewer(view.prompt, view.output)
+            except Exception:
+                logger.exception("Improvement reviewer failed for %s.", task_id)
+                return
+            for text in suggestions:
+                if text.strip():
+                    self.queue(text.strip(), priority="low")
+
+        threading.Thread(target=work, daemon=True).start()
+
     def approve(self, task_id: UUID, approved: bool, reason: str | None = None) -> None:
         run = self._runs.get(task_id)
         if run is not None:
@@ -221,7 +321,7 @@ class WebTaskRunner:
             view = TaskView(
                 id=record.id,
                 prompt=record.prompt,
-                status=record.status if result else "pending",
+                status=record.status,
                 active=False,
                 output=result.output if result else "",
                 steps=list(result.steps) if result else [],
