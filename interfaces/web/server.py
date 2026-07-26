@@ -130,6 +130,7 @@ class ReviewApp:
         schedules=None,
         notifications=None,
         inbox=None,
+        verify_connector=None,
     ) -> None:
         self._service = service
         self._projects = projects
@@ -145,6 +146,7 @@ class ReviewApp:
         self._schedules = schedules
         self._notifications = notifications
         self._inbox = inbox
+        self._verify_connector = verify_connector
 
         self._get_routes = [
             (re.compile(r"^/$"), self._dashboard),
@@ -293,6 +295,14 @@ class ReviewApp:
             (
                 re.compile(r"^/connections/(?P<key>[\w-]+)/connect$"),
                 self._connect,
+            ),
+            (
+                re.compile(r"^/connections/(?P<key>[\w-]+)/verify$"),
+                self._verify_connection,
+            ),
+            (
+                re.compile(r"^/connections/(?P<key>[\w-]+)/login$"),
+                self._connector_login,
             ),
             (
                 re.compile(r"^/connections/(?P<key>[\w-]+)/disconnect$"),
@@ -816,10 +826,63 @@ class ReviewApp:
             list(PRESETS.values()), store.enabled_keys()
         )
 
-    def _connect(self, form, key):
-        self._require_connections().enable(key)
+    def _verifier(self):
+        if self._verify_connector is not None:
+            return self._verify_connector
+        from infrastructure.mcp.verify import verify_connector
 
-        return 303, "/connections"
+        return verify_connector
+
+    def _first_value(self, form: dict) -> dict:
+        # Form values arrive as {name: [value]}; flatten for connector fields.
+        return {name: (values[0] if values else "") for name, values in form.items()}
+
+    def _connect(self, form, key):
+        """Save a connector's input, start it, and verify — the wizard's core."""
+        from infrastructure.connectors import PRESETS
+
+        if key not in PRESETS:
+            return 404, error_page(f"No connector '{key}'.")
+
+        store = self._require_connections()
+        store.enable(key, self._first_value(form))
+        result = self._verifier()(store.specs()[key])
+
+        if not result.ok:
+            # Leave it registered so the person can retry Verify after signing
+            # in, but report honestly that it is not usable yet.
+            return 200, json.dumps(
+                {"ok": False, "message": result.message, "tools": 0}
+            )
+        return 200, json.dumps(
+            {"ok": True, "message": result.message, "tools": result.tools}
+        )
+
+    def _verify_connection(self, form, key):
+        store = self._require_connections()
+        specs = store.specs()
+        if key not in specs:
+            return 200, json.dumps(
+                {"ok": False, "message": "Not connected yet.", "tools": 0}
+            )
+        result = self._verifier()(specs[key])
+        return 200, json.dumps(
+            {"ok": result.ok, "message": result.message, "tools": result.tools}
+        )
+
+    def _connector_login(self, form, key):
+        """Begin a device-code sign-in and return the code for the user."""
+        from infrastructure.connectors import PRESETS
+        from infrastructure.mcp.device_login import begin_device_login
+
+        preset = PRESETS.get(key)
+        if preset is None or preset.auth != "device":
+            return 200, json.dumps(
+                {"ok": False, "message": "This connector has no device sign-in."}
+            )
+        self._require_connections().enable(key, self._first_value(form))
+        info = begin_device_login(preset.command, list(preset.args))
+        return 200, json.dumps(info)
 
     def _disconnect(self, form, key):
         self._require_connections().disable(key)

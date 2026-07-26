@@ -1,7 +1,18 @@
 from __future__ import annotations
 
+import json
+
 from infrastructure.connectors import PRESETS, ConnectionStore
+from infrastructure.mcp.verify import VerifyResult
 from interfaces.web.server import ReviewApp
+
+
+def _ok_verifier(spec):
+    return VerifyResult(True, 3, "Connected — 3 tools available.")
+
+
+def _fail_verifier(spec):
+    return VerifyResult(False, 0, "Could not start the connector: not signed in.")
 
 
 def test_enabling_a_connector_writes_a_usable_mcp_spec(tmp_path):
@@ -49,13 +60,76 @@ def test_connections_page_lists_presets_and_status(tmp_path):
     assert "Connected" in body  # gmail shows as connected
 
 
-def test_connect_and_disconnect_routes(tmp_path):
+def test_enable_writes_a_path_argument_and_env_credentials(tmp_path):
     store = ConnectionStore(tmp_path / "connections.json")
-    app = ReviewApp(service=None, projects=None, connections=store)
 
-    code, redirect = app.post("/connections/files/connect", {})
-    assert code == 303 and redirect == "/connections"
-    assert "files" in store.enabled_keys()
+    store.enable("files", {"path": r"C:\work"})
+    store.enable("jira", {"site": "acme", "email": "a@b.com", "token": "secret"})
+
+    assert store.specs()["files"].args[-1] == r"C:\work"
+    jira_env = store.specs()["jira"].env
+    assert jira_env["ATLASSIAN_SITE_NAME"] == "acme"
+    assert jira_env["ATLASSIAN_API_TOKEN"] == "secret"
+
+
+def test_connect_collects_input_then_verifies(tmp_path):
+    store = ConnectionStore(tmp_path / "connections.json")
+    app = ReviewApp(
+        service=None,
+        projects=None,
+        connections=store,
+        verify_connector=_ok_verifier,
+    )
+
+    code, body = app.post("/connections/files/connect", {"path": [r"C:\work"]})
+
+    assert code == 200
+    payload = json.loads(body)
+    assert payload["ok"] is True and payload["tools"] == 3
+    assert store.specs()["files"].args[-1] == r"C:\work"  # input was saved
 
     app.post("/connections/files/disconnect", {})
     assert "files" not in store.enabled_keys()
+
+
+def test_connect_reports_failure_but_keeps_it_registered_to_retry(tmp_path):
+    store = ConnectionStore(tmp_path / "connections.json")
+    app = ReviewApp(
+        service=None,
+        projects=None,
+        connections=store,
+        verify_connector=_fail_verifier,
+    )
+
+    code, body = app.post("/connections/outlook/connect", {})
+
+    payload = json.loads(body)
+    assert code == 200 and payload["ok"] is False
+    assert "not signed in" in payload["message"]
+    assert "outlook" in store.enabled_keys()  # retained so Verify can be retried
+
+
+def test_verify_route_reports_a_registered_connector(tmp_path):
+    store = ConnectionStore(tmp_path / "connections.json")
+    store.enable("files", {"path": r"C:\work"})
+    app = ReviewApp(
+        service=None,
+        projects=None,
+        connections=store,
+        verify_connector=_ok_verifier,
+    )
+
+    code, body = app.post("/connections/files/verify", {})
+
+    assert code == 200 and json.loads(body)["ok"] is True
+
+
+def test_the_connect_page_carries_the_wizard_and_field_specs(tmp_path):
+    store = ConnectionStore(tmp_path / "connections.json")
+    app = ReviewApp(service=None, projects=None, connections=store)
+
+    _, body = app.get("/connections", {})
+
+    assert "openWizard(" in body  # the modal is wired
+    assert "XERO_CLIENT_ID" not in body  # secrets' env names are not leaked
+    assert '"auth": "device"' in body or '"auth":"device"' in body

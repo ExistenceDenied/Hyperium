@@ -8,6 +8,18 @@ from infrastructure.mcp.config import McpServerSpec
 
 
 @dataclass(frozen=True)
+class ConnectorField:
+    """One piece of input the wizard collects before a connector can start."""
+
+    key: str
+    label: str
+    kind: str = "text"  # text | secret | path
+    target: str = "arg"  # arg (appended to the command) | env (an env var)
+    env: str = ""  # the environment variable name, when target == "env"
+    placeholder: str = ""
+
+
+@dataclass(frozen=True)
 class ConnectorPreset:
     """A known service an agent can be connected to, over MCP."""
 
@@ -19,6 +31,11 @@ class ConnectorPreset:
     args: list[str] = field(default_factory=list)
     #: One-time setup a person must do outside Hyperium (install, sign in).
     setup: str = ""
+    #: Input the wizard asks for before connecting (a path, credentials…).
+    fields: list[ConnectorField] = field(default_factory=list)
+    #: How the service signs in: "none" (nothing, or the fields are enough),
+    #: "oauth" (a browser opens on first run), "device" (a device-code login).
+    auth: str = "none"
 
 
 # A small, honest starter set. Each runs an MCP server the agent then uses; the
@@ -33,9 +50,10 @@ PRESETS: dict[str, ConnectorPreset] = {
         "and prepare replies for you to send.",
         command="npx",
         args=["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
-        setup="Requires Node.js. The first run opens a Google sign-in in your "
+        setup="Requires Node.js. Connecting opens a Google sign-in in your "
         "browser to authorise access; the token is stored by the connector, "
         "not by Hyperium. Sending an email is always held for your approval.",
+        auth="oauth",
     ),
     "outlook": ConnectorPreset(
         key="outlook",
@@ -47,6 +65,7 @@ PRESETS: dict[str, ConnectorPreset] = {
         args=["-y", "@softeria/ms-365-mcp-server"],
         setup="Requires Node.js and a one-time Microsoft sign-in. Powers the "
         "Email page's inbox worker, which only ever drafts — never sends.",
+        auth="device",
     ),
     "google-calendar": ConnectorPreset(
         key="google-calendar",
@@ -58,6 +77,7 @@ PRESETS: dict[str, ConnectorPreset] = {
         args=["-y", "@cocal/google-calendar-mcp"],
         setup="Requires Node.js and a one-time Google sign-in. Creating or "
         "changing an event is held for your approval.",
+        auth="oauth",
     ),
     "files": ConnectorPreset(
         key="files",
@@ -67,8 +87,17 @@ PRESETS: dict[str, ConnectorPreset] = {
         "business files. No sign-in needed.",
         command="npx",
         args=["-y", "@modelcontextprotocol/server-filesystem"],
-        setup="Requires Node.js. Add the folder path as a final argument in the "
-        "connections file. Writes are held for your approval.",
+        setup="Requires Node.js. Give it the folder to work in below. Writes are "
+        "held for your approval.",
+        fields=[
+            ConnectorField(
+                key="path",
+                label="Folder to give the agent access to",
+                kind="path",
+                target="arg",
+                placeholder=r"C:\Users\you\Business",
+            )
+        ],
     ),
     "xero": ConnectorPreset(
         key="xero",
@@ -78,8 +107,24 @@ PRESETS: dict[str, ConnectorPreset] = {
         "can draft invoices and answer questions about your books.",
         command="npx",
         args=["-y", "@xeroapi/xero-mcp-server"],
-        setup="Requires Node.js and a Xero sign-in with your API credentials. "
-        "Anything that changes your accounts is held for your approval.",
+        setup="Requires Node.js and Xero API credentials (create a Custom "
+        "Connection in the Xero developer portal). Anything that changes your "
+        "accounts is held for your approval.",
+        fields=[
+            ConnectorField(
+                key="client_id",
+                label="Xero client ID",
+                target="env",
+                env="XERO_CLIENT_ID",
+            ),
+            ConnectorField(
+                key="client_secret",
+                label="Xero client secret",
+                kind="secret",
+                target="env",
+                env="XERO_CLIENT_SECRET",
+            ),
+        ],
     ),
     "jira": ConnectorPreset(
         key="jira",
@@ -89,9 +134,30 @@ PRESETS: dict[str, ConnectorPreset] = {
         "turn action items and plans into tickets and keep them up to date.",
         command="npx",
         args=["-y", "@aashari/mcp-server-atlassian-jira"],
-        setup="Requires Node.js and a Jira sign-in: add your site URL, email "
-        "and an Atlassian API token to this connector's env in the connections "
-        "file. Creating or changing an issue is held for your approval.",
+        setup="Requires Node.js and an Atlassian API token. Creating or "
+        "changing an issue is held for your approval.",
+        fields=[
+            ConnectorField(
+                key="site",
+                label="Atlassian site name (the part before .atlassian.net)",
+                target="env",
+                env="ATLASSIAN_SITE_NAME",
+                placeholder="your-company",
+            ),
+            ConnectorField(
+                key="email",
+                label="Atlassian account email",
+                target="env",
+                env="ATLASSIAN_USER_EMAIL",
+            ),
+            ConnectorField(
+                key="token",
+                label="Atlassian API token",
+                kind="secret",
+                target="env",
+                env="ATLASSIAN_API_TOKEN",
+            ),
+        ],
     ),
 }
 
@@ -114,16 +180,30 @@ class ConnectionStore:
     def enabled_keys(self) -> set[str]:
         return set(self._read().get("servers", {}))
 
-    def enable(self, key: str) -> None:
+    def enable(self, key: str, values: dict | None = None) -> None:
         if key not in PRESETS:
             raise KeyError(f"No connector preset '{key}'.")
 
         preset = PRESETS[key]
+        values = values or {}
+
+        args = list(preset.args)
+        env: dict[str, str] = {}
+        for spec in preset.fields:
+            value = (values.get(spec.key) or "").strip()
+            if not value:
+                continue
+            if spec.target == "env" and spec.env:
+                env[spec.env] = value
+            else:
+                args.append(value)
+
+        entry = {"command": preset.command, "args": args}
+        if env:
+            entry["env"] = env
+
         data = self._read()
-        data.setdefault("servers", {})[key] = {
-            "command": preset.command,
-            "args": list(preset.args),
-        }
+        data.setdefault("servers", {})[key] = entry
         self._write(data)
 
     def disable(self, key: str) -> None:
