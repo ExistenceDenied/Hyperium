@@ -159,6 +159,33 @@ def test_attach_deliverables_rule_attaches_files(tmp_path):
     assert mail.drafts[0][2] == (("report.xlsx", b"data"),)
 
 
+def test_a_reply_that_spawns_a_task_defers_to_a_single_delivery(tmp_path):
+    mail = _FakeMail([_message()])
+    queued: list = []
+    decision = TriageDecision(category="reply", tasks=["Prepare a deck"])
+
+    _worker(
+        mail, _store(tmp_path), decision, enqueue=lambda p, **kw: queued.append(kw)
+    ).tick()
+
+    # No immediate acknowledgement — the one reply will be the delivery.
+    assert mail.drafts == [] and mail.sent == []
+    # The task carries the email origin so the delivery can reply to it.
+    assert queued[0]["origin"]["message_id"] == "m1"
+
+
+def test_an_internal_task_from_an_fyi_carries_no_origin(tmp_path):
+    mail = _FakeMail([_message()])
+    queued: list = []
+    decision = TriageDecision(category="fyi", tasks=["Log the enquiry"])
+
+    _worker(
+        mail, _store(tmp_path), decision, enqueue=lambda p, **kw: queued.append(kw)
+    ).tick()
+
+    assert queued[0]["origin"] is None  # not reply-worthy → nobody is emailed
+
+
 def test_implied_tasks_are_queued(tmp_path):
     mail = _FakeMail([_message()])
     queued: list = []

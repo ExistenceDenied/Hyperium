@@ -80,8 +80,10 @@ class InboxWorker:
         context = self._context()
         decision = self._triage.classify(message, context)
         actions: list[str] = []
+        reply_expected = decision.should_draft
 
-        if decision.should_draft:
+        if reply_expected and not decision.tasks:
+            # Nothing is being produced — reply now.
             actions.extend(self._reply(message, decision, context))
         elif decision.needs_attention:
             actions.append("flagged for you")
@@ -90,17 +92,29 @@ class InboxWorker:
                 f"Needs you: {message.subject} — {decision.summary}",
                 "/email",
             )
+        elif reply_expected and decision.tasks:
+            # A single reply: it will be the delivery of what the tasks produce,
+            # so there is no separate "we're preparing it" acknowledgement.
+            actions.append("reply deferred to the deliverable")
+
+        # Only a reply-worthy email routes its result back; internal tasks
+        # (from an FYI or a flagged mail) run without emailing anyone.
+        origin = (
+            {
+                "type": "email",
+                "message_id": message.id,
+                "sender": message.sender,
+                "subject": message.subject,
+            }
+            if reply_expected
+            else None
+        )
 
         for task in decision.tasks:
             self._enqueue(
                 f"{task}\n\n(From an email: {message.subject} — {message.sender})",
                 priority=decision.priority,
-                origin={
-                    "type": "email",
-                    "message_id": message.id,
-                    "sender": message.sender,
-                    "subject": message.subject,
-                },
+                origin=origin,
             )
             actions.append(f"queued task: {task}")
             self._notify("task", f"From email: {task}", "/tasks")
