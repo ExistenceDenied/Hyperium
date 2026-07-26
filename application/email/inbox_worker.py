@@ -5,6 +5,7 @@ import threading
 import time
 from collections.abc import Callable
 
+from core.email.triage import CATEGORIES
 from core.interfaces.mail_provider import MailProvider
 from core.rules.rule import RuleSet
 
@@ -79,12 +80,20 @@ class InboxWorker:
     def _handle(self, message) -> None:
         context = self._context()
         decision = self._triage.classify(message, context)
+        # A rule may override the model's category — deterministic control over
+        # triage (e.g. "mail from me is always a reply, never escalated").
+        ruled = self._rules().decide(self._inputs(message, decision))
         actions: list[str] = []
+        override = ruled.get("category")
+        if override in CATEGORIES and override != decision.category:
+            actions.append(f"category set to '{override}' by a rule")
+            decision.category = override
+
         reply_expected = decision.should_draft
 
         if reply_expected and not decision.tasks:
             # Nothing is being produced — reply now.
-            actions.extend(self._reply(message, decision, context))
+            actions.extend(self._reply(message, decision, context, ruled))
         elif decision.needs_attention:
             actions.append("flagged for you")
             self._notify(
@@ -131,9 +140,8 @@ class InboxWorker:
             actions=actions,
         )
 
-    def _reply(self, message, decision, context) -> list[str]:
+    def _reply(self, message, decision, context, ruled) -> list[str]:
         body = self._responder.compose(message, context)
-        ruled = self._rules().decide(self._inputs(message, decision))
 
         attachments = ()
         if ruled.is_true("attach_deliverables"):

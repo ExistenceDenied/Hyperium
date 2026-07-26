@@ -597,6 +597,9 @@ class ReviewApp:
             )
 
         outputs = {}
+        category = form.get("category", [""])[0].strip()
+        if category in ("reply", "escalate", "fyi", "skip"):
+            outputs["category"] = category
         delivery = form.get("delivery", [""])[0].strip()
         if delivery in ("draft", "send"):
             outputs["delivery"] = delivery

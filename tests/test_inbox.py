@@ -159,6 +159,29 @@ def test_attach_deliverables_rule_attaches_files(tmp_path):
     assert mail.drafts[0][2] == (("report.xlsx", b"data"),)
 
 
+def test_a_rule_overrides_the_triaged_category(tmp_path):
+    # The model escalates, but a rule says mail from me is always a reply.
+    mail = _FakeMail([_message(sender="krisleunis1@gmail.com")])
+    rules = RuleSet(
+        [
+            Rule(
+                name="mine-are-replies",
+                conditions=[Condition("sender", "startsWith", "krisleunis")],
+                outputs={"category": "reply"},
+            )
+        ]
+    )
+
+    _worker(
+        mail,
+        _store(tmp_path),
+        TriageDecision(category="escalate"),
+        rules=lambda: rules,
+    ).tick()
+
+    assert len(mail.drafts) == 1  # drafted a reply, not escalated
+
+
 def test_a_reply_that_spawns_a_task_defers_to_a_single_delivery(tmp_path):
     mail = _FakeMail([_message()])
     queued: list = []
