@@ -183,6 +183,37 @@ def test_attached_files_are_named_in_the_prompt(tmp_path):
     assert any("EY vs Euroclear.xlsx" in prompt for prompt in provider.prompts)
 
 
+def test_task_carries_priority_notes_and_duration(tmp_path):
+    provider = _RecordingAnswer()
+
+    def build(approver, stack, root):
+        return AgentRunner(provider, [], approver=approver)
+
+    repo = TaskRepository(tmp_path / "tasks")
+    runner = WebTaskRunner(build, repo, "m", "sys", workspace=tmp_path)
+
+    task_id = runner.start("do it", priority="high")
+    assert _wait(lambda: runner.view(task_id).status == "completed")
+
+    runner.add_note(task_id, "reviewed and good")
+
+    view = runner.view(task_id)
+    assert view.priority == "high"
+    assert view.duration is not None
+    assert any(note.text == "reviewed and good" for note in view.notes)
+
+
+def test_note_route_adds_a_comment(tmp_path):
+    app = _app(tmp_path)
+
+    _, redirect = app.upload("/tasks", {"prompt": "do it", "priority": "high"}, [])
+    task_id = redirect.rsplit("/", 1)[1]
+
+    code, _ = app.post(f"/tasks/{task_id}/note", {"note": ["a comment"]})
+    assert code == 303
+    assert _wait(lambda: "a comment" in app.get(f"/tasks/{task_id}", {})[1])
+
+
 def test_files_upload_and_download_live_on_the_task(tmp_path):
     app = _app(tmp_path)
 

@@ -540,6 +540,7 @@ def run_agent_task(args, settings: Settings, prompt: str) -> int:
             result=result,
             model=settings.model,
             root=Path(args.root).resolve(),
+            priority=getattr(args, "priority", "medium"),
         )
 
     if args.verbose and result.steps:
@@ -591,11 +592,14 @@ def command_task_list(args, settings: Settings) -> int:
         print('No saved tasks yet. Run one with: hyperium do "..."')
         return 0
 
-    print(f"{'ID':<38} {'WHEN':<17} {'STATUS':<15} PROMPT")
+    print(f"{'ID':<38} {'WHEN':<17} {'STATUS':<12} {'PRIORITY':<9} PROMPT")
     for record in records:
         when = record.created_at.strftime("%Y-%m-%d %H:%M")
-        prompt = record.prompt.replace("\n", " ")[:48]
-        print(f"{str(record.id):<38} {when:<17} {record.status:<15} {prompt}")
+        prompt = record.prompt.replace("\n", " ")[:44]
+        print(
+            f"{str(record.id):<38} {when:<17} {record.status:<12} "
+            f"{record.priority:<9} {prompt}"
+        )
 
     return 0
 
@@ -608,10 +612,20 @@ def command_task_show(args, settings: Settings) -> int:
     )
 
     print(f"Task {record.id}")
-    print(f"  when:   {record.created_at.isoformat()}")
-    print(f"  model:  {record.model}")
-    print(f"  status: {record.status}")
+    print(f"  when:     {record.created_at.isoformat()}")
+    print(f"  model:    {record.model}")
+    print(f"  status:   {record.status}")
+    print(f"  priority: {record.priority}")
+
+    if record.duration_seconds is not None:
+        print(f"  took:     {int(record.duration_seconds)}s")
+
     print(f"\nPrompt:\n  {record.prompt}")
+
+    if record.notes:
+        print("\nNotes:")
+        for note in record.notes:
+            print(f"  - {note.text}  ({note.at.strftime('%Y-%m-%d %H:%M')})")
 
     if record.artifacts:
         print("\nDeliverables:")
@@ -957,6 +971,12 @@ def _add_agent_run_args(parser: argparse.ArgumentParser) -> None:
         "--mcp",
         default=None,
         help="Path to an MCP config; connects its servers' tools to the agent.",
+    )
+    parser.add_argument(
+        "--priority",
+        default="medium",
+        choices=["low", "medium", "high"],
+        help="Task priority, recorded on the task.",
     )
     parser.add_argument(
         "--no-save",

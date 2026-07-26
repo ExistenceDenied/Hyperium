@@ -13,13 +13,14 @@ import logging
 import threading
 from contextlib import ExitStack
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
 from application.agent.task_service import deliverables_from
 from core.agents.agent_result import AgentResult, AgentStep
 from core.agents.approval import ActionRequest, ApprovalDecision
-from core.agents.task_record import TaskRecord
+from core.agents.task_record import Note, TaskRecord
 from core.interfaces.approver import Approver
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,7 @@ class _Run:
     id: UUID
     prompt: str
     approver: WebApprover
+    priority: str = "medium"
     result: AgentResult | None = None
     error: str | None = None
     artifacts: list[str] = field(default_factory=list)
@@ -86,6 +88,9 @@ class TaskView:
     error: str | None = None
     pending: ActionRequest | None = None
     files: list[tuple[str, int]] = field(default_factory=list)
+    priority: str = "medium"
+    duration: float | None = None
+    notes: list[Note] = field(default_factory=list)
 
 
 class WebTaskRunner:
@@ -127,14 +132,22 @@ class WebTaskRunner:
             if safe:
                 (directory / safe).write_bytes(content)
 
-    def start(self, prompt: str, uploads=None, task_id: UUID | None = None) -> UUID:
+    def start(
+        self,
+        prompt: str,
+        uploads=None,
+        task_id: UUID | None = None,
+        priority: str = "medium",
+    ) -> UUID:
         task_id = task_id or uuid4()
         self.folder(task_id).mkdir(parents=True, exist_ok=True)
 
         if uploads:
             self.save_uploads(task_id, uploads)
 
-        run = _Run(id=task_id, prompt=prompt, approver=WebApprover())
+        run = _Run(
+            id=task_id, prompt=prompt, approver=WebApprover(), priority=priority
+        )
 
         with self._lock:
             self._runs[task_id] = run
@@ -148,29 +161,55 @@ class WebTaskRunner:
         if run is not None:
             run.approver.resolve(approved, reason)
 
+    def add_note(self, task_id: UUID, text: str) -> None:
+        try:
+            record = self._repository.get(task_id)
+        except Exception:
+            run = self._runs.get(task_id)
+            record = TaskRecord(
+                id=task_id,
+                prompt=run.prompt if run else "",
+                priority=run.priority if run else "medium",
+            )
+
+        record.notes.append(Note(text=text))
+        self._repository.save(record)
+
     def view(self, task_id: UUID) -> TaskView | None:
         files = self.files(task_id)
         run = self._runs.get(task_id)
 
-        if run is not None:
-            return self._live_view(run, files)
-
         try:
             record = self._repository.get(task_id)
         except Exception:
+            record = None
+
+        if run is None and record is None:
             return None
 
-        result = record.result
+        if run is not None:
+            view = self._live_view(run, files)
+            view.priority = run.priority
+        else:
+            result = record.result
+            view = TaskView(
+                id=record.id,
+                prompt=record.prompt,
+                status=record.status if result else "pending",
+                active=False,
+                output=result.output if result else "",
+                steps=list(result.steps) if result else [],
+                files=files,
+            )
 
-        return TaskView(
-            id=record.id,
-            prompt=record.prompt,
-            status=record.status if result else "pending",
-            active=False,
-            output=result.output if result else "",
-            steps=list(result.steps) if result else [],
-            files=files,
-        )
+        # Ticket metadata — priority, notes, how long it took — lives on the
+        # persisted record, which outlives the in-memory run.
+        if record is not None:
+            view.priority = record.priority
+            view.notes = list(record.notes)
+            view.duration = record.duration_seconds
+
+        return view
 
     def index(self) -> list[TaskView]:
         with self._lock:
@@ -245,6 +284,11 @@ class WebTaskRunner:
                 result = runner.run(self._prompt(run), system=self._system)
 
             run.artifacts = deliverables_from(result.steps, root)
+            # Keep notes added while the task ran, and stamp the finish time.
+            try:
+                existing = self._repository.get(run.id).notes
+            except Exception:
+                existing = []
             # Persist before flipping the view to done, so a reader that sees
             # "completed" can always load the saved record.
             self._repository.save(
@@ -254,6 +298,9 @@ class WebTaskRunner:
                     model=self._model,
                     result=result,
                     artifacts=run.artifacts,
+                    priority=run.priority,
+                    completed_at=datetime.now(timezone.utc),
+                    notes=existing,
                 )
             )
             run.result = result

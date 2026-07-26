@@ -51,12 +51,17 @@ class TaskService:
         result: AgentResult,
         model: str | None = None,
         root=None,
+        priority: str = "medium",
     ) -> TaskRecord:
+        from datetime import datetime, timezone
+
         record = TaskRecord(
             prompt=prompt,
             model=model,
             result=result,
             artifacts=deliverables_from(result.steps, root),
+            priority=priority,
+            completed_at=datetime.now(timezone.utc),
         )
         self._repository.save(record)
 

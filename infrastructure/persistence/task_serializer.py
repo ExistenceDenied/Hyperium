@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from core.agents.agent_result import AgentResult, AgentStep, StopReason
-from core.agents.task_record import TaskRecord
+from core.agents.task_record import Note, TaskRecord
 
 SCHEMA_VERSION = 1
 
@@ -26,16 +26,32 @@ class TaskSerializer:
             "created_at": record.created_at.isoformat(),
             "model": record.model,
             "artifacts": list(record.artifacts),
+            "priority": record.priority,
+            "completed_at": (
+                record.completed_at.isoformat() if record.completed_at else None
+            ),
+            "notes": [
+                {"text": note.text, "at": note.at.isoformat()}
+                for note in record.notes
+            ],
             "result": self._result_to_dict(record.result),
         }
 
     def from_dict(self, payload: dict[str, Any]) -> TaskRecord:
+        completed = payload.get("completed_at")
+
         return TaskRecord(
             prompt=payload["prompt"],
             id=UUID(payload["id"]),
             created_at=datetime.fromisoformat(payload["created_at"]),
             model=payload.get("model"),
             artifacts=list(payload.get("artifacts", [])),
+            priority=payload.get("priority", "medium"),
+            completed_at=datetime.fromisoformat(completed) if completed else None,
+            notes=[
+                Note(text=note["text"], at=datetime.fromisoformat(note["at"]))
+                for note in payload.get("notes", [])
+            ],
             result=self._result_from_dict(payload.get("result")),
         )
 

@@ -10,11 +10,22 @@ from core.agents.agent_result import AgentResult
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
+PRIORITIES = ("low", "medium", "high")
+
+
+@dataclass
+class Note:
+    """A note added to a task — a comment, or a record of what happened."""
+
+    text: str
+    at: datetime = field(default_factory=_now)
+
 
 @dataclass
 class TaskRecord:
     """
-    A durable record of one direct-task run: what was asked, and what happened.
+    A durable record of one direct-task run — a ticket, in effect: what was
+    asked, at what priority, what happened, when, and the notes people added.
 
     This is the audit trail and memory of the direct-task path. A record is
     written for every run, so the question 'what has the agent done, and did it
@@ -30,6 +41,9 @@ class TaskRecord:
     #: Absolute paths of the files this task produced, so a person can find and
     #: open the deliverable without hunting for it.
     artifacts: list[str] = field(default_factory=list)
+    priority: str = "medium"
+    completed_at: datetime | None = None
+    notes: list[Note] = field(default_factory=list)
 
     @property
     def status(self) -> str:
@@ -43,3 +57,11 @@ class TaskRecord:
     def acted(self) -> bool:
         """Whether the run performed any tool call at all."""
         return bool(self.result and self.result.steps)
+
+    @property
+    def duration_seconds(self) -> float | None:
+        """How long the task took, once it has finished."""
+        if self.completed_at is None:
+            return None
+
+        return (self.completed_at - self.created_at).total_seconds()

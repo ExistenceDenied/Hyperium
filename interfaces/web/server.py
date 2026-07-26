@@ -226,6 +226,10 @@ class ReviewApp:
                 self._rerun_task,
             ),
             (
+                re.compile(r"^/tasks/(?P<key>[0-9a-f-]{36})/note$"),
+                self._add_note,
+            ),
+            (
                 re.compile(r"^/connections/(?P<key>[\w-]+)/connect$"),
                 self._connect,
             ),
@@ -423,7 +427,8 @@ class ReviewApp:
             prompt = (fields.get("prompt") or "").strip()
             if not prompt:
                 return 400, error_page("A task needs a prompt.", code=400)
-            task_id = tasks.start(prompt, uploads=files)
+            priority = (fields.get("priority") or "medium").strip()
+            task_id = tasks.start(prompt, uploads=files, priority=priority)
             return 303, f"/tasks/{task_id}"
 
         match = re.match(r"^/tasks/([0-9a-f-]{36})/upload$", path)
@@ -457,9 +462,17 @@ class ReviewApp:
 
         # Re-run in place: same folder, so any files uploaded to the task are
         # used and its outputs update rather than starting a fresh task.
-        tasks.start(view.prompt, task_id=task_id)
+        tasks.start(view.prompt, task_id=task_id, priority=view.priority)
 
         return 303, f"/tasks/{task_id}"
+
+    def _add_note(self, form, key):
+        note = form.get("note", [""])[0].strip()
+
+        if note:
+            self._require_tasks().add_note(UUID(key), note)
+
+        return 303, f"/tasks/{key}"
 
     # -------------------------------------------------------- connections
 
