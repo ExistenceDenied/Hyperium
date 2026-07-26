@@ -22,6 +22,21 @@ class Note:
 
 
 @dataclass
+class Exchange:
+    """
+    One finished turn in a task's thread: what was asked and what came back.
+
+    A task is a conversation, not a single shot. When someone replies to a
+    finished task ("now make it shorter"), the turn that just completed is kept
+    here so the next run has the thread behind it and the page can show it.
+    """
+
+    prompt: str
+    output: str
+    at: datetime = field(default_factory=_now)
+
+
+@dataclass
 class TaskRecord:
     """
     A durable record of one direct-task run — a ticket, in effect: what was
@@ -50,6 +65,9 @@ class TaskRecord:
     methodology: str = ""
     #: True while the task is in the queue, waiting for the worker to launch it.
     queued: bool = False
+    #: Earlier turns of this task's thread. The current turn is `prompt` and
+    #: `result`; each reply pushes the previous turn here.
+    history: list[Exchange] = field(default_factory=list)
 
     @property
     def status(self) -> str:

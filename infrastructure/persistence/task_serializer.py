@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from core.agents.agent_result import AgentResult, AgentStep, StopReason
-from core.agents.task_record import Note, TaskRecord
+from core.agents.task_record import Exchange, Note, TaskRecord
 
 SCHEMA_VERSION = 1
 
@@ -37,6 +37,14 @@ class TaskSerializer:
                 {"text": note.text, "at": note.at.isoformat()}
                 for note in record.notes
             ],
+            "history": [
+                {
+                    "prompt": turn.prompt,
+                    "output": turn.output,
+                    "at": turn.at.isoformat(),
+                }
+                for turn in record.history
+            ],
             "result": self._result_to_dict(record.result),
         }
 
@@ -57,6 +65,14 @@ class TaskSerializer:
             notes=[
                 Note(text=note["text"], at=datetime.fromisoformat(note["at"]))
                 for note in payload.get("notes", [])
+            ],
+            history=[
+                Exchange(
+                    prompt=turn["prompt"],
+                    output=turn["output"],
+                    at=datetime.fromisoformat(turn["at"]),
+                )
+                for turn in payload.get("history", [])
             ],
             result=self._result_from_dict(payload.get("result")),
         )

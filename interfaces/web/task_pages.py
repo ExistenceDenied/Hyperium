@@ -292,6 +292,34 @@ def _files(view) -> str:
     )
 
 
+def _thread(view) -> str:
+    if not view.history:
+        return ""
+    turns = []
+    for turn in view.history:
+        turns.append(
+            "<div class='card'>"
+            f"<p class='muted small' style='margin-top:0'>Asked: "
+            f"{esc(turn.prompt)}</p>"
+            f"<div class='doc'>{render(turn.output)}</div></div>"
+        )
+    return "<h3>Conversation so far</h3>" + "".join(turns)
+
+
+def _reply_box(view) -> str:
+    return (
+        "<h3>Follow up</h3>"
+        "<p class='muted small'>Reply to continue this task — it keeps the files "
+        "it made and the thread so far, so you can refine rather than restart "
+        "(e.g. &ldquo;make it shorter&rdquo; or &ldquo;add a summary slide&rdquo;).</p>"
+        f"<form method='post' action='/tasks/{view.id}/reply'>"
+        "<textarea name='message' rows='3' required "
+        "placeholder='Ask for a change or the next step…'></textarea>"
+        "<div class='actions'><button class='primary' type='submit'>"
+        "Send</button></div></form>"
+    )
+
+
 def _notes(view) -> str:
     if view.notes:
         items = "".join(
@@ -353,9 +381,14 @@ def task_detail(view) -> str:
 
     parts.append(_files(view))
 
+    parts.append(_thread(view))
+
     if view.output:
         parts.append("<h3>Result</h3>")
         parts.append(f"<div class='card doc'>{render(view.output)}</div>")
+
+    if not view.active:
+        parts.append(_reply_box(view))
 
     if view.status == "completed":
         parts.append(

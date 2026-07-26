@@ -21,7 +21,7 @@ from uuid import UUID, uuid4
 from application.agent.task_service import deliverables_from
 from core.agents.agent_result import AgentResult, AgentStep
 from core.agents.approval import ActionRequest, ApprovalDecision
-from core.agents.task_record import Note, TaskRecord
+from core.agents.task_record import Exchange, Note, TaskRecord
 from core.interfaces.approver import Approver
 
 logger = logging.getLogger(__name__)
@@ -84,6 +84,8 @@ class _Run:
     result: AgentResult | None = None
     error: str | None = None
     artifacts: list[str] = field(default_factory=list)
+    #: Earlier finished turns, when this run is a reply continuing a thread.
+    history: list[Exchange] = field(default_factory=list)
 
 
 @dataclass
@@ -104,6 +106,7 @@ class TaskView:
     notes: list[Note] = field(default_factory=list)
     technique: str = ""
     methodology: str = ""
+    history: list[Exchange] = field(default_factory=list)
 
 
 class WebTaskRunner:
@@ -174,6 +177,7 @@ class WebTaskRunner:
         priority: str = "medium",
         technique: str = "",
         methodology: str = "",
+        history=None,
     ) -> UUID:
         task_id = task_id or uuid4()
         self.folder(task_id).mkdir(parents=True, exist_ok=True)
@@ -195,6 +199,7 @@ class WebTaskRunner:
             priority=priority,
             technique=technique,
             methodology=methodology,
+            history=list(history or []),
         )
 
         with self._lock:
@@ -298,6 +303,34 @@ class WebTaskRunner:
 
         threading.Thread(target=work, daemon=True).start()
 
+    def follow_up(self, task_id: UUID, message: str) -> None:
+        """
+        Reply to a finished task, continuing it as a thread.
+
+        The turn that just finished is pushed into the history, and the reply
+        runs in the same folder — so the agent keeps the files it already made
+        and the thread behind it, rather than starting from nothing.
+        """
+        try:
+            record = self._repository.get(task_id)
+        except Exception:
+            record = None
+        if record is None:
+            return
+
+        history = list(record.history)
+        if record.result is not None:
+            history.append(Exchange(record.prompt, record.result.output))
+
+        self.start(
+            message,
+            task_id=task_id,
+            priority=record.priority,
+            technique=record.technique,
+            methodology=record.methodology,
+            history=history,
+        )
+
     def approve(self, task_id: UUID, approved: bool, reason: str | None = None) -> None:
         run = self._runs.get(task_id)
         if run is not None:
@@ -354,6 +387,12 @@ class WebTaskRunner:
             view.duration = record.duration_seconds
             view.technique = record.technique
             view.methodology = record.methodology
+            view.history = list(record.history)
+
+        # A reply in flight carries the accumulated thread on the run, before
+        # the record is rewritten — show that so the page is right mid-run.
+        if run is not None and run.history:
+            view.history = list(run.history)
 
         return view
 
@@ -389,6 +428,16 @@ class WebTaskRunner:
         approach = self._approach(run.technique, run.methodology)
         if approach:
             preamble.append(approach)
+
+        if run.history:
+            thread = [
+                "This task is a conversation. Here is what came before — continue "
+                "it, staying consistent with what you already produced and editing "
+                "the same files rather than starting over:"
+            ]
+            for turn in run.history:
+                thread.append(f"\nAsked: {turn.prompt}\nYou produced:\n{turn.output}")
+            preamble.append("\n".join(thread))
 
         available = [name for name, _ in self.files(run.id)]
         if available:
@@ -444,10 +493,14 @@ class WebTaskRunner:
 
             run.artifacts = deliverables_from(result.steps, root)
             # Keep notes added while the task ran, and stamp the finish time.
+            # A reply carries the thread on the run; a plain re-run keeps
+            # whatever thread the saved record already had.
             try:
-                existing = self._repository.get(run.id).notes
+                prior = self._repository.get(run.id)
             except Exception:
-                existing = []
+                prior = None
+            existing = prior.notes if prior else []
+            history = run.history or (prior.history if prior else [])
             # Persist before flipping the view to done, so a reader that sees
             # "completed" can always load the saved record.
             self._repository.save(
@@ -462,6 +515,7 @@ class WebTaskRunner:
                     methodology=run.methodology,
                     completed_at=datetime.now(timezone.utc),
                     notes=existing,
+                    history=list(history),
                 )
             )
             run.result = result

@@ -265,6 +265,10 @@ class ReviewApp:
                 re.compile(r"^/tasks/(?P<key>[0-9a-f-]{36})/improve$"),
                 self._improve_task,
             ),
+            (
+                re.compile(r"^/tasks/(?P<key>[0-9a-f-]{36})/reply$"),
+                self._reply_task,
+            ),
             (re.compile(r"^/notifications/read$"), self._notifications_read),
             (
                 re.compile(r"^/notifications/(?P<key>[0-9a-f-]{36})/read$"),
@@ -619,6 +623,12 @@ class ReviewApp:
 
     def _improve_task(self, form, key):
         self._require_tasks().suggest_improvements(UUID(key))
+        return 303, f"/tasks/{key}"
+
+    def _reply_task(self, form, key):
+        message = form.get("message", [""])[0].strip()
+        if message:
+            self._require_tasks().follow_up(UUID(key), message)
         return 303, f"/tasks/{key}"
 
     # ----------------------------------------------------------- schedules
