@@ -31,14 +31,21 @@ class WritePowerPointTool(Tool):
         "required": ["path", "title", "content"],
     }
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, template=None) -> None:
         self._root = root.resolve()
+        self._template = template
 
     def preview(self, arguments: dict) -> str:
         return f"Create a PowerPoint deck at {arguments.get('path')}."
 
     def invoke(self, arguments: dict) -> str:
-        return _write(self._root, arguments, to_pptx, ".pptx", "PowerPoint deck")
+        return _write(
+            self._root,
+            arguments,
+            lambda t, c: to_pptx(t, c, self._template),
+            ".pptx",
+            "PowerPoint deck",
+        )
 
 
 class WriteWordTool(Tool):
@@ -67,14 +74,21 @@ class WriteWordTool(Tool):
         "required": ["path", "title", "content"],
     }
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, template=None) -> None:
         self._root = root.resolve()
+        self._template = template
 
     def preview(self, arguments: dict) -> str:
         return f"Create a Word document at {arguments.get('path')}."
 
     def invoke(self, arguments: dict) -> str:
-        return _write(self._root, arguments, to_docx, ".docx", "Word document")
+        return _write(
+            self._root,
+            arguments,
+            lambda t, c: to_docx(t, c, self._template),
+            ".docx",
+            "Word document",
+        )
 
 
 def _write(root: Path, arguments: dict, render, suffix: str, label: str) -> str:

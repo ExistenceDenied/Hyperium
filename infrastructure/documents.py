@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import io
 import re
+from pathlib import Path
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)")
 _BULLET = re.compile(r"^\s*[-*+]\s+")
@@ -104,8 +105,13 @@ def _add_inline(paragraph, text: str) -> None:
             paragraph.add_run(_plain(part))
 
 
-def to_docx(title: str, markdown: str) -> bytes:
-    """Render Markdown into a .docx document, returned as bytes."""
+def to_docx(title: str, markdown: str, template=None) -> bytes:
+    """
+    Render Markdown into a .docx document, returned as bytes.
+
+    A template (.docx/.dotx) is used as the base when given, so the document
+    inherits its styles, fonts, header and logo — on-brand rather than blank.
+    """
     try:
         from docx import Document
     except ImportError as error:  # pragma: no cover - exercised via the CLI
@@ -113,7 +119,8 @@ def to_docx(title: str, markdown: str) -> bytes:
             "python-docx is not installed. Run: pip install -e '.[office]'"
         ) from error
 
-    document = Document()
+    use = str(template) if template and Path(template).is_file() else None
+    document = Document(use) if use else Document()
     document.add_heading(title, level=0)
 
     for kind, payload in parse_blocks(markdown):
@@ -172,8 +179,41 @@ def _slidify(blocks) -> list[tuple[str | None, list[str], list[str]]]:
     return slides or [(None, ["(no content)"], [])]
 
 
-def to_pptx(title: str, markdown: str) -> bytes:
-    """Render a slide-outline Markdown into a .pptx deck, returned as bytes."""
+def _clear_slides(presentation) -> None:
+    """Drop any slides from a template, keeping its theme, master and layouts."""
+    slide_ids = presentation.slides._sldIdLst
+    for slide_id in list(slide_ids):
+        slide_ids.remove(slide_id)
+
+
+def _set_title(slide, text: str) -> None:
+    try:
+        if slide.shapes.title is not None:
+            slide.shapes.title.text = text
+    except (KeyError, AttributeError):
+        pass
+
+
+def _body_frame(slide):
+    # The content placeholder is usually index 1, but a branded layout may
+    # differ; fall back to the first non-title placeholder.
+    try:
+        return slide.placeholders[1].text_frame
+    except KeyError:
+        for placeholder in slide.placeholders:
+            if placeholder != slide.shapes.title:
+                return placeholder.text_frame
+    return None
+
+
+def to_pptx(title: str, markdown: str, template=None) -> bytes:
+    """
+    Render a slide-outline Markdown into a .pptx deck, returned as bytes.
+
+    A template (.pptx/.potx) is used as the base when given, so the deck inherits
+    its theme, fonts, colours and master layouts — on-brand rather than blank.
+    Any slides in the template are cleared; its design is kept.
+    """
     try:
         from pptx import Presentation
     except ImportError as error:  # pragma: no cover - exercised via the CLI
@@ -181,20 +221,27 @@ def to_pptx(title: str, markdown: str) -> bytes:
             "python-pptx is not installed. Run: pip install -e '.[office]'"
         ) from error
 
-    presentation = Presentation()
+    use = str(template) if template and Path(template).is_file() else None
+    presentation = Presentation(use) if use else Presentation()
+    _clear_slides(presentation)
 
-    opening = presentation.slides.add_slide(presentation.slide_layouts[0])
-    opening.shapes.title.text = title
+    layouts = presentation.slide_layouts
+    opening = presentation.slides.add_slide(layouts[0])
+    _set_title(opening, title)
 
+    content_layout = layouts[1] if len(layouts) > 1 else layouts[0]
     for slide_title, bullets, notes in _slidify(parse_blocks(markdown)):
-        slide = presentation.slides.add_slide(presentation.slide_layouts[1])
-        slide.shapes.title.text = slide_title or title
+        slide = presentation.slides.add_slide(content_layout)
+        _set_title(slide, slide_title or title)
 
-        frame = slide.placeholders[1].text_frame
-        frame.clear()
-        for index, bullet in enumerate(bullets):
-            paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
-            paragraph.text = bullet
+        frame = _body_frame(slide)
+        if frame is not None:
+            frame.clear()
+            for index, bullet in enumerate(bullets):
+                paragraph = (
+                    frame.paragraphs[0] if index == 0 else frame.add_paragraph()
+                )
+                paragraph.text = bullet
 
         if notes:
             slide.notes_slide.notes_text_frame.text = "\n".join(notes)

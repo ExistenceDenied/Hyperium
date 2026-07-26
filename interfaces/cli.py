@@ -781,9 +781,9 @@ def build_web_task_runner(settings: Settings, notify=None, deliver=None):
             timeout_seconds=settings.llm_timeout_seconds,
             temperature=settings.temperature,
         )
-        # Always writable, scoped to the task's own folder — every write is held
-        # at the approval gate, so the person deciding is the control.
-        tools = writable_tools(root)
+        # Writable, scoped to the task's own folder. Deliverables use a branded
+        # template if one is dropped in workspace/branding.
+        tools = writable_tools(root, branding=settings.workspace / "branding")
 
         # Connector tools are opt-in for direct tasks. Handing a local model
         # every tool from every connector (a mail server alone can expose ~190)

@@ -44,7 +44,21 @@ def read_only_tools(root: Path, *, timeout_seconds: float = 30.0) -> list[Tool]:
     ]
 
 
-def writable_tools(root: Path, *, timeout_seconds: float = 30.0) -> list[Tool]:
+def _brand_template(branding, names) -> Path | None:
+    """The first branded template that exists in the branding folder, if any."""
+    if not branding:
+        return None
+    folder = Path(branding)
+    for name in names:
+        candidate = folder / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def writable_tools(
+    root: Path, *, timeout_seconds: float = 30.0, branding=None
+) -> list[Tool]:
     """
     The read-only tools plus those that write files.
 
@@ -54,12 +68,17 @@ def writable_tools(root: Path, *, timeout_seconds: float = 30.0) -> list[Tool]:
     file, a spreadsheet, a Word document or a PowerPoint deck all land in the
     task's directory. (Connector tools, which act on the outside world, keep
     their approval gate.)
+
+    If a ``branding`` folder holds a template deck or document, the Word and
+    PowerPoint tools build on it, so deliverables come out on-brand.
     """
+    deck = _brand_template(branding, ("template.pptx", "template.potx", "deck.pptx"))
+    doc = _brand_template(branding, ("template.docx", "template.dotx", "document.docx"))
     return [
         *read_only_tools(root, timeout_seconds=timeout_seconds),
         WriteFileTool(root),
         WriteExcelTool(root),
         UpdateExcelCellTool(root),
-        WriteWordTool(root),
-        WritePowerPointTool(root),
+        WriteWordTool(root, doc),
+        WritePowerPointTool(root, deck),
     ]
