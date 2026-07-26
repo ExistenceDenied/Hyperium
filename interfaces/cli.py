@@ -721,7 +721,7 @@ def command_submit(args, settings: Settings) -> int:
     return 0
 
 
-def build_web_task_runner(settings: Settings):
+def build_web_task_runner(settings: Settings, notify=None):
     """The browser's task runner: agent runs with web-mediated approval."""
     from application.agent.agent_runner import AgentRunner
     from application.review.task_reviewer import TaskReviewer
@@ -806,6 +806,7 @@ def build_web_task_runner(settings: Settings):
         approach=approach,
         context=memory.as_context,
         reviewer=task_reviewer.review,
+        notify=notify,
     )
 
 
@@ -814,12 +815,15 @@ def command_serve(args, settings: Settings) -> int:
     from infrastructure.connectors import ConnectionStore
     from infrastructure.memory import MemoryStore
     from infrastructure.methodologies.technique_repository import TechniqueRepository
+    from infrastructure.notifications import NotificationStore
     from infrastructure.scheduling import ScheduleStore
     from interfaces.web.server import ReviewApp, serve
 
     service, repository = build_context(settings)
 
-    tasks = build_web_task_runner(settings)
+    notifications = NotificationStore(settings.state_directory / "notifications.json")
+
+    tasks = build_web_task_runner(settings, notify=notifications.add)
     tasks.start_worker()  # continuously launch queued tasks in the background
 
     schedules = ScheduleStore(settings.state_directory / "schedules.json")
@@ -837,6 +841,7 @@ def command_serve(args, settings: Settings) -> int:
         techniques=TechniqueRepository(BUILTIN_ROOT / "techniques"),
         memory=MemoryStore(settings.state_directory / "memory.json"),
         schedules=schedules,
+        notifications=notifications,
     )
 
     httpd = serve(app, host=args.host, port=args.port)

@@ -118,7 +118,7 @@ def test_markdown_escapes_a_crafted_link_target():
 def test_index_lists_engagements_and_flags_pending_review(tmp_path):
     app, project, _ = build(tmp_path)
 
-    status, body = app.get("/", {})
+    status, body = app.get("/engagements", {})
 
     assert status == 200
     assert "Business Analysis training" in body or project.mission.title in body

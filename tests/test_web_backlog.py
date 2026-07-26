@@ -581,7 +581,7 @@ def test_no_submission_form_appears_for_ai_work(tmp_path):
     # the engagement page for an AI-run engagement offers no submission box
     from tests.fixtures import build_consultant  # noqa: F401
 
-    _, body = app.get("/", {})
+    _, body = app.get("/engagements", {})
 
     assert "Submit work" not in body
 

@@ -37,17 +37,25 @@ class WebApprover(Approver):
     single pending slot is enough.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, on_pending=None) -> None:
         self._pending: ActionRequest | None = None
         self._decision: ApprovalDecision | None = None
         self._event = threading.Event()
         self._lock = threading.Lock()
+        # Called when an action starts waiting for a person — so it can be
+        # surfaced as an alert rather than sitting unseen behind the gate.
+        self._on_pending = on_pending or (lambda request: None)
 
     def review(self, request: ActionRequest) -> ApprovalDecision:
         with self._lock:
             self._pending = request
             self._decision = None
             self._event.clear()
+
+        try:
+            self._on_pending(request)
+        except Exception:  # a notification must never block the gate
+            logger.exception("Approval notification failed.")
 
         self._event.wait()
 
@@ -118,6 +126,7 @@ class WebTaskRunner:
         context=None,
         reviewer=None,
         max_concurrent=1,
+        notify=None,
     ) -> None:
         self._build_runner = build_runner
         self._repository = repository
@@ -131,6 +140,8 @@ class WebTaskRunner:
         # reviewer(prompt, output) -> [improvement task descriptions].
         self._reviewer = reviewer
         self._max_concurrent = max_concurrent
+        # notify(kind, text, link) -> record an alert for the person.
+        self._notify = notify or (lambda kind, text, link="": None)
         self._runs: dict[UUID, _Run] = {}
         self._lock = threading.Lock()
 
@@ -170,10 +181,17 @@ class WebTaskRunner:
         if uploads:
             self.save_uploads(task_id, uploads)
 
+        def on_pending(request):
+            self._notify(
+                "approval",
+                f"A task needs your approval: {request.preview}",
+                f"/tasks/{task_id}",
+            )
+
         run = _Run(
             id=task_id,
             prompt=prompt,
-            approver=WebApprover(),
+            approver=WebApprover(on_pending=on_pending),
             priority=priority,
             technique=technique,
             methodology=methodology,
@@ -447,6 +465,16 @@ class WebTaskRunner:
                 )
             )
             run.result = result
+            self._notify(
+                "task",
+                f"Task finished: {run.prompt[:70]}",
+                f"/tasks/{run.id}",
+            )
         except Exception as error:
             logger.exception("Web task %s failed.", run.id)
             run.error = str(error)
+            self._notify(
+                "error",
+                f"Task failed: {run.prompt[:70]}",
+                f"/tasks/{run.id}",
+            )

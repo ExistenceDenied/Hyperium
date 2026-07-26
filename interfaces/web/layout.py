@@ -90,13 +90,54 @@ label .hint { font-weight:400; color:var(--muted); font-size:13px; }
 """
 
 _NAV = (
-    ("/", "Engagements", "engagements"),
+    ("/", "Dashboard", "dashboard"),
+    ("/engagements", "Engagements", "engagements"),
     ("/tasks", "Tasks", "tasks"),
     ("/memory", "Memory", "memory"),
     ("/connections", "Connect", "connections"),
     ("/methodologies", "Methodologies", "methodologies"),
     ("/techniques", "Techniques", "techniques"),
+    ("/notifications", "Alerts", "notifications"),
 )
+
+# Keeps the Alerts badge current and raises a desktop notification for anything
+# new, so work the system does while you are away actually reaches you. It polls
+# a tiny JSON endpoint; ids already seen are remembered so an alert pings once.
+_ALERTS_SCRIPT = """
+<script>
+(function () {
+  var badge = document.getElementById('alert-badge');
+  if (!('Notification' in window)) { /* badge still works */ }
+  else if (Notification.permission === 'default') { Notification.requestPermission(); }
+  var seen;
+  try { seen = JSON.parse(localStorage.getItem('seenAlerts') || '[]'); }
+  catch (e) { seen = []; }
+  function poll() {
+    fetch('/notifications/unread.json').then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (badge) {
+          if (data.count > 0) {
+            badge.textContent = data.count;
+            badge.style.display = '';
+          } else { badge.style.display = 'none'; }
+        }
+        (data.items || []).forEach(function (item) {
+          if (seen.indexOf(item.id) !== -1) return;
+          seen.push(item.id);
+          if ('Notification' in window && Notification.permission === 'granted') {
+            var n = new Notification('Hyperium', { body: item.text });
+            n.onclick = function () { if (item.link) window.location = item.link; };
+          }
+        });
+        try { localStorage.setItem('seenAlerts', JSON.stringify(seen.slice(-200))); }
+        catch (e) {}
+      }).catch(function () {});
+  }
+  poll();
+  setInterval(poll, 15000);
+})();
+</script>
+"""
 
 
 def esc(value) -> str:
@@ -106,10 +147,16 @@ def esc(value) -> str:
 def page(title: str, body: str, refresh: bool = False, section: str = "") -> str:
     meta = '<meta http-equiv="refresh" content="4">' if refresh else ""
 
-    nav = "".join(
-        f"<a href='{href}' class='{'on' if key == section else ''}'>{label}</a>"
-        for href, label, key in _NAV
-    )
+    links = []
+    for href, label, key in _NAV:
+        on = "on" if key == section else ""
+        if key == "notifications":
+            label += (
+                " <span id='alert-badge' class='pill bad' "
+                "style='display:none;padding:0 6px'></span>"
+            )
+        links.append(f"<a href='{href}' class='{on}'>{label}</a>")
+    nav = "".join(links)
 
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
@@ -118,7 +165,7 @@ def page(title: str, body: str, refresh: bool = False, section: str = "") -> str
         "</head><body><header class='top'><div class='wrap'>"
         "<strong><a href='/' style='text-decoration:none;color:inherit'>"
         f"Hyperium</a></strong><nav>{nav}</nav></div></header>"
-        f"<div class='wrap'>{body}</div></body></html>"
+        f"<div class='wrap'>{body}</div>{_ALERTS_SCRIPT}</body></html>"
     )
 
 
@@ -130,5 +177,5 @@ def error_page(message: str, code: int = 404) -> str:
     return page(
         "Not found" if code == 404 else "Error",
         f"<h1>{code}</h1><p class='muted'>{esc(message)}</p>"
-        "<p><a href='/'>Back to engagements</a></p>",
+        "<p><a href='/'>Back to the dashboard</a></p>",
     )

@@ -12,6 +12,7 @@ framework to a project whose only runtime dependency is an LLM client.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import threading
@@ -26,8 +27,10 @@ from core.project.project import UnknownDeliverableError
 from interfaces.web import (
     backlog_pages,
     connections_pages,
+    dashboard_pages,
     memory_pages,
     methodology_pages,
+    notification_pages,
     pages,
     task_pages,
     techniques_pages,
@@ -123,6 +126,7 @@ class ReviewApp:
         techniques=None,
         memory=None,
         schedules=None,
+        notifications=None,
     ) -> None:
         self._service = service
         self._projects = projects
@@ -136,9 +140,13 @@ class ReviewApp:
         self._technique_repo = techniques
         self._memory = memory
         self._schedules = schedules
+        self._notifications = notifications
 
         self._get_routes = [
-            (re.compile(r"^/$"), self._engagements),
+            (re.compile(r"^/$"), self._dashboard),
+            (re.compile(r"^/engagements$"), self._engagements),
+            (re.compile(r"^/notifications$"), self._notifications_index),
+            (re.compile(r"^/notifications/unread\.json$"), self._notifications_unread),
             (re.compile(r"^/missions$"), self._backlog),
             (re.compile(r"^/missions/new$"), self._new_mission),
             (re.compile(r"^/missions/(?P<key>[0-9a-f-]{36})$"), self._mission),
@@ -257,6 +265,11 @@ class ReviewApp:
                 re.compile(r"^/tasks/(?P<key>[0-9a-f-]{36})/improve$"),
                 self._improve_task,
             ),
+            (re.compile(r"^/notifications/read$"), self._notifications_read),
+            (
+                re.compile(r"^/notifications/(?P<key>[0-9a-f-]{36})/read$"),
+                self._notification_read,
+            ),
             (re.compile(r"^/schedules$"), self._create_schedule),
             (
                 re.compile(r"^/schedules/(?P<key>[0-9a-f-]{36})/delete$"),
@@ -331,6 +344,64 @@ class ReviewApp:
                     return code, error_page(str(error), code=code)
 
         return 404, error_page(f"Unknown path '{path}'.")
+
+    # --------------------------------------------------------- dashboard
+
+    def _dashboard(self, query):
+        views = self._tasks.index() if self._tasks else []
+
+        counts: dict[str, int] = {}
+        attention = []
+        for view in views:
+            counts[view.status] = counts.get(view.status, 0) + 1
+            if view.status == "awaiting approval":
+                attention.append((view.id, view.prompt))
+
+        schedules = self._schedules.list() if self._schedules else []
+        alerts = self._notifications.list(6) if self._notifications else []
+
+        summary = {
+            "counts": counts,
+            "attention": attention,
+            "recent_tasks": views[:6],
+            "schedules": {
+                "active": sum(1 for s in schedules if s.enabled),
+                "paused": sum(1 for s in schedules if not s.enabled),
+            },
+            "alerts": alerts,
+        }
+        return 200, dashboard_pages.dashboard(summary)
+
+    # ------------------------------------------------------- notifications
+
+    def _require_notifications(self):
+        if self._notifications is None:
+            raise RuntimeError("This interface has no notification store.")
+        return self._notifications
+
+    def _notifications_index(self, query):
+        return 200, notification_pages.notifications_index(
+            self._require_notifications().list()
+        )
+
+    def _notifications_unread(self, query):
+        notes = self._notifications.unread(20) if self._notifications else []
+        payload = {
+            "count": len(notes),
+            "items": [
+                {"id": str(note.id), "text": note.text, "link": note.link}
+                for note in notes
+            ],
+        }
+        return 200, json.dumps(payload)
+
+    def _notifications_read(self, form):
+        self._require_notifications().mark_all_read()
+        return 303, "/notifications"
+
+    def _notification_read(self, form, key):
+        self._require_notifications().mark_read(UUID(key))
+        return 303, "/notifications"
 
     # -------------------------------------------------------- engagements
 
