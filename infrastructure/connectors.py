@@ -70,6 +70,18 @@ PRESETS: dict[str, ConnectorPreset] = {
         setup="Requires Node.js and a Xero sign-in with your API credentials. "
         "Anything that changes your accounts is held for your approval.",
     ),
+    "jira": ConnectorPreset(
+        key="jira",
+        name="Jira",
+        category="Project tracking",
+        description="Read, create and update Jira issues — so the agent can "
+        "turn action items and plans into tickets and keep them up to date.",
+        command="npx",
+        args=["-y", "@aashari/mcp-server-atlassian-jira"],
+        setup="Requires Node.js and a Jira sign-in: add your site URL, email "
+        "and an Atlassian API token to this connector's env in the connections "
+        "file. Creating or changing an issue is held for your approval.",
+    ),
 }
 
 

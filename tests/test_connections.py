@@ -45,6 +45,7 @@ def test_connections_page_lists_presets_and_status(tmp_path):
     assert code == 200
     assert "Gmail" in body
     assert "Xero" in body
+    assert "Jira" in body
     assert "Connected" in body  # gmail shows as connected
 
 
