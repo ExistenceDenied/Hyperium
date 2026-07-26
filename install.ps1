@@ -38,7 +38,7 @@ if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
     }
 }
 
-$model = if ($env:HYPERIUM_MODEL) { $env:HYPERIUM_MODEL } else { "qwen3:8b" }
+$model = if ($env:HYPERIUM_MODEL) { $env:HYPERIUM_MODEL } else { "qwen3:latest" }
 Step "Downloading the local model ($model) - one-time, a few GB"
 try { ollama pull $model } catch {
     Write-Host "Could not pull $model now. Once Ollama is running, run: ollama pull $model" -ForegroundColor Yellow

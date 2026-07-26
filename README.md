@@ -52,10 +52,11 @@ in `templates/`. Tune any agent's style by editing its file in
 ## Choosing a model
 
 Hyperium runs on whatever Ollama model you point it at (`HYPERIUM_MODEL`), and it
-uses your GPU automatically. On an 8 GB graphics card, **`qwen3:8b` runs fully on
-the GPU and is the fast, reliable choice**; larger models spill onto the CPU and
-slow down. For the autonomous reviewer you can set a separate, sharper model with
-`HYPERIUM_REVIEW_MODEL`.
+uses your GPU automatically. The default is **`qwen3:latest`** (an 8B model that
+runs fully on an 8 GB graphics card — the fast, reliable choice). Larger models
+(`qwen3:14b`, `qwen3:30b-a3b`) spill onto the CPU and slow down. Use whatever you
+have pulled — check with `ollama list`. For the autonomous reviewer you can set a
+separate, sharper model with `HYPERIUM_REVIEW_MODEL`.
 
 ## Architecture
 
