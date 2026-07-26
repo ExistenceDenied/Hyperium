@@ -26,6 +26,7 @@ from core.project.project import UnknownDeliverableError
 from interfaces.web import (
     backlog_pages,
     connections_pages,
+    memory_pages,
     methodology_pages,
     pages,
     task_pages,
@@ -120,6 +121,7 @@ class ReviewApp:
         connections=None,
         workspace=None,
         techniques=None,
+        memory=None,
     ) -> None:
         self._service = service
         self._projects = projects
@@ -131,6 +133,7 @@ class ReviewApp:
         self._connections = connections
         self._workspace = workspace
         self._technique_repo = techniques
+        self._memory = memory
 
         self._get_routes = [
             (re.compile(r"^/$"), self._engagements),
@@ -159,6 +162,11 @@ class ReviewApp:
             (
                 re.compile(r"^/techniques/(?P<key>[\w-]+)$"),
                 self._technique_edit,
+            ),
+            (re.compile(r"^/memory$"), self._memory_index),
+            (
+                re.compile(r"^/memory/(?P<key>[0-9a-f-]{36})$"),
+                self._memory_edit,
             ),
             (re.compile(r"^/tasks$"), self._tasks_index),
             (re.compile(r"^/tasks/new$"), self._new_task),
@@ -258,6 +266,15 @@ class ReviewApp:
             (
                 re.compile(r"^/techniques/(?P<key>[\w-]+)$"),
                 self._update_technique,
+            ),
+            (re.compile(r"^/memory$"), self._add_memory),
+            (
+                re.compile(r"^/memory/(?P<key>[0-9a-f-]{36})/delete$"),
+                self._delete_memory,
+            ),
+            (
+                re.compile(r"^/memory/(?P<key>[0-9a-f-]{36})$"),
+                self._update_memory,
             ),
             (
                 re.compile(
@@ -825,6 +842,40 @@ class ReviewApp:
             filename=f"{key}.md",
             media_type="text/markdown; charset=utf-8",
         )
+
+    # ------------------------------------------------------------- memory
+
+    def _require_memory(self):
+        if self._memory is None:
+            raise RuntimeError("This interface has no memory store.")
+        return self._memory
+
+    def _memory_index(self, query):
+        return 200, memory_pages.memory_index(self._require_memory().list())
+
+    def _memory_edit(self, query, key):
+        entry = self._require_memory().get(UUID(key))
+        if entry is None:
+            return 404, error_page("No such memory entry.")
+        return 200, memory_pages.memory_edit(entry)
+
+    def _add_memory(self, form):
+        text = form.get("text", [""])[0].strip()
+        if text:
+            self._require_memory().add(text, form.get("category", ["general"])[0])
+        return 303, "/memory"
+
+    def _update_memory(self, form, key):
+        self._require_memory().update(
+            UUID(key),
+            form.get("text", [""])[0],
+            form.get("category", ["general"])[0],
+        )
+        return 303, "/memory"
+
+    def _delete_memory(self, form, key):
+        self._require_memory().delete(UUID(key))
+        return 303, "/memory"
 
 
 def build_handler(app: ReviewApp):

@@ -48,6 +48,7 @@ def build_activity_executor(settings: Settings):
     from application.agent.approval_policies import AutoDenyApprover
     from application.execution.agent_activity_executor import AgentActivityExecutor
     from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
+    from infrastructure.memory import MemoryStore
     from infrastructure.tools import read_only_tools
 
     provider = OllamaAgentProvider(
@@ -56,12 +57,15 @@ def build_activity_executor(settings: Settings):
         temperature=settings.temperature,
     )
 
+    context = MemoryStore(settings.state_directory / "memory.json").as_context()
+
     return AgentActivityExecutor(
         AgentRunner(
             provider,
             read_only_tools(settings.workspace),
             approver=AutoDenyApprover(),
-        )
+        ),
+        context=context,
     )
 
 
@@ -724,6 +728,7 @@ def build_web_task_runner(settings: Settings):
     from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
     from infrastructure.mcp.mcp_client import McpClient
     from infrastructure.mcp.mcp_toolset import connect_mcp_tools
+    from infrastructure.memory import MemoryStore
     from infrastructure.methodologies.technique_repository import TechniqueRepository
     from infrastructure.persistence.task_repository import TaskRepository
     from infrastructure.tools import writable_tools
@@ -732,6 +737,7 @@ def build_web_task_runner(settings: Settings):
     connections = ConnectionStore(settings.state_directory / "connections.json")
     techniques = TechniqueRepository(BUILTIN_ROOT / "techniques")
     methodologies = build_methodologies(settings)
+    memory = MemoryStore(settings.state_directory / "memory.json")
 
     def approach(technique_key, methodology_key):
         parts = []
@@ -794,11 +800,13 @@ def build_web_task_runner(settings: Settings):
         system=AGENT_SYSTEM,
         workspace=settings.workspace,
         approach=approach,
+        context=memory.as_context,
     )
 
 
 def command_serve(args, settings: Settings) -> int:
     from infrastructure.connectors import ConnectionStore
+    from infrastructure.memory import MemoryStore
     from infrastructure.methodologies.technique_repository import TechniqueRepository
     from interfaces.web.server import ReviewApp, serve
 
@@ -814,6 +822,7 @@ def command_serve(args, settings: Settings) -> int:
         connections=ConnectionStore(settings.state_directory / "connections.json"),
         workspace=settings.workspace,
         techniques=TechniqueRepository(BUILTIN_ROOT / "techniques"),
+        memory=MemoryStore(settings.state_directory / "memory.json"),
     )
 
     httpd = serve(app, host=args.host, port=args.port)

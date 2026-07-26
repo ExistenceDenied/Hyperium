@@ -25,8 +25,11 @@ class AgentActivityExecutor(ActivityExecutor):
     completions, without changing what work the methodology decides on.
     """
 
-    def __init__(self, runner: AgentRunner) -> None:
+    def __init__(self, runner: AgentRunner, context: str = "") -> None:
         self._runner = runner
+        self._context = context
 
     def execute(self, prompt: str, activity: Activity) -> str:
+        if self._context:
+            prompt = self._context + "\n\n" + prompt
         return self._runner.run(prompt, system=ACTIVITY_SYSTEM).output

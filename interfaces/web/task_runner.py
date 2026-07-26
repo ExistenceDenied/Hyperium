@@ -107,7 +107,14 @@ class WebTaskRunner:
     """
 
     def __init__(
-        self, build_runner, repository, model, system, workspace, approach=None
+        self,
+        build_runner,
+        repository,
+        model,
+        system,
+        workspace,
+        approach=None,
+        context=None,
     ) -> None:
         self._build_runner = build_runner
         self._repository = repository
@@ -116,6 +123,8 @@ class WebTaskRunner:
         self._workspace = Path(workspace)
         # approach(technique_key, methodology_key) -> guidance text to prepend.
         self._approach = approach or (lambda technique, methodology: "")
+        # context() -> the business memory prepended to every task.
+        self._context = context or (lambda: "")
         self._runs: dict[UUID, _Run] = {}
         self._lock = threading.Lock()
 
@@ -254,6 +263,10 @@ class WebTaskRunner:
         them rather than asking "what's the file path?".
         """
         preamble = []
+
+        memory = self._context()
+        if memory:
+            preamble.append(memory)
 
         approach = self._approach(run.technique, run.methodology)
         if approach:
