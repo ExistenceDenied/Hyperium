@@ -28,6 +28,11 @@ class InboxStore:
         return self._read().get("folder", "Inbox")
 
     @property
+    def interval_minutes(self) -> int:
+        """How often the worker checks the folder. At least once a minute."""
+        return max(1, int(self._read().get("interval_minutes", 2)))
+
+    @property
     def last_seen(self) -> datetime | None:
         """The newest message handled — so a tick only fetches what is newer."""
         value = self._read().get("last_seen")
@@ -39,11 +44,18 @@ class InboxStore:
             data["last_seen"] = at.isoformat()
             self._write(data)
 
-    def configure(self, enabled: bool, folder: str) -> None:
+    def configure(
+        self, enabled: bool, folder: str, interval_minutes: int = 2
+    ) -> None:
         with self._lock:
             data = self._read()
             data["enabled"] = bool(enabled)
             data["folder"] = (folder or "Inbox").strip() or "Inbox"
+            try:
+                minutes = int(interval_minutes)
+            except (TypeError, ValueError):
+                minutes = 2
+            data["interval_minutes"] = max(1, minutes)
             self._write(data)
 
     def is_handled(self, message_id: str) -> bool:

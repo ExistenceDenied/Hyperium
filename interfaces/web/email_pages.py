@@ -43,7 +43,9 @@ def _handled(items) -> str:
     )
 
 
-def email_page(enabled: bool, folder: str, connected: bool, handled) -> str:
+def email_page(
+    enabled: bool, folder: str, connected: bool, handled, interval: int = 2
+) -> str:
     on = "checked" if enabled else ""
     warn = (
         ""
@@ -67,8 +69,12 @@ def email_page(enabled: bool, folder: str, connected: bool, handled) -> str:
         "<label style='display:flex;gap:8px;font-weight:600'>"
         f"<input type='checkbox' name='enabled' value='1' style='width:auto' {on}> "
         "Draft replies for new mail in this folder</label>"
+        "<div class='grid2'>"
         "<label>Folder"
         f"<input name='folder' value='{esc(folder)}' placeholder='Inbox'></label>"
+        "<label>Check every (minutes)"
+        f"<input name='interval' type='number' min='1' value='{int(interval)}'>"
+        "</label></div>"
         "<p class='muted small'>Tip: route the mail you want handled into a "
         "dedicated folder (e.g. a rule that files it under 'Hyperium'), so the "
         "worker only ever sees what you intend.</p>"

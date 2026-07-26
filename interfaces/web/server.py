@@ -555,12 +555,18 @@ class ReviewApp:
             folder=inbox.folder,
             connected=self._outlook_connected(),
             handled=inbox.handled(),
+            interval=inbox.interval_minutes,
         )
 
     def _email_configure(self, form):
+        try:
+            interval = int(form.get("interval", ["2"])[0])
+        except ValueError:
+            interval = 2
         self._require_inbox().configure(
             enabled="enabled" in form,
             folder=form.get("folder", ["Inbox"])[0],
+            interval_minutes=interval,
         )
         return 303, "/email"
 

@@ -195,3 +195,15 @@ def test_worker_does_nothing_while_disabled(tmp_path):
 
     assert _worker(mail, _store(tmp_path, enabled=False), _REPLY).tick() == 0
     assert mail.drafts == [] and mail.sent == []
+
+
+def test_check_interval_is_configurable_and_clamped(tmp_path):
+    store = InboxStore(tmp_path / "inbox.json")
+
+    assert store.interval_minutes == 2  # sensible default
+
+    store.configure(enabled=True, folder="Inbox", interval_minutes=15)
+    assert InboxStore(tmp_path / "inbox.json").interval_minutes == 15
+
+    store.configure(enabled=True, folder="Inbox", interval_minutes=0)
+    assert InboxStore(tmp_path / "inbox.json").interval_minutes == 1  # never < 1

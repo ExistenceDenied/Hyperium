@@ -156,13 +156,15 @@ class InboxWorker:
             "confidence": str(decision.confidence),
         }
 
-    def start(self, interval: float = 120.0) -> None:
+    def start(self) -> None:
         def loop() -> None:
             while True:
                 try:
                     self.tick()
                 except Exception:
                     logger.exception("Inbox worker tick failed.")
-                time.sleep(interval)
+                # Re-read the interval each cycle, so a change on the Email page
+                # takes effect on the next check without restarting the server.
+                time.sleep(max(60, self._store.interval_minutes * 60))
 
         threading.Thread(target=loop, daemon=True).start()
