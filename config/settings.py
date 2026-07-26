@@ -23,6 +23,12 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    return _env(name, "1" if default else "0").strip().lower() in (
+        "1", "true", "yes", "on"
+    )
+
+
 @dataclass(frozen=True)
 class Settings:
     """
@@ -44,6 +50,11 @@ class Settings:
     log_file: Path = Path("logs/hyperium.log")
     methodology_directory: Path | None = None
     default_methodology: str = "business-analysis"
+    # Whether a direct task's agent is also handed every connected tool. Off by
+    # default: a local model chooses badly among hundreds of tools, and it made
+    # deliverable tasks fail ("none of the functions apply"). The email worker
+    # reaches Outlook directly, so this does not affect it.
+    task_connectors: bool = False
 
     @classmethod
     def load(cls) -> "Settings":
@@ -68,4 +79,5 @@ class Settings:
             default_methodology=_env(
                 "DEFAULT_METHODOLOGY", cls.default_methodology
             ),
+            task_connectors=_env_bool("TASK_CONNECTORS", cls.task_connectors),
         )

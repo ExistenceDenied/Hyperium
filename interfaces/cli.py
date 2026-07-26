@@ -785,18 +785,22 @@ def build_web_task_runner(settings: Settings, notify=None):
         # at the approval gate, so the person deciding is the control.
         tools = writable_tools(root)
 
-        # Best-effort: a connector that cannot start (missing Node, not signed
-        # in) is logged and skipped, never fails the task.
-        for name, spec in connections.specs().items():
-            try:
-                client = stack.enter_context(
-                    McpClient(spec.command, spec.args, env=spec.env)
-                )
-                tools.extend(connect_mcp_tools(client))
-            except Exception as error:
-                logging.getLogger(__name__).warning(
-                    "Connector '%s' is unavailable: %s", name, error
-                )
+        # Connector tools are opt-in for direct tasks. Handing a local model
+        # every tool from every connector (a mail server alone can expose ~190)
+        # drowns the local file/office tools and makes it answer "none of the
+        # functions apply" instead of producing the deliverable. Enable with
+        # HYPERIUM_TASK_CONNECTORS=1 when running a model that can cope.
+        if settings.task_connectors:
+            for name, spec in connections.specs().items():
+                try:
+                    client = stack.enter_context(
+                        McpClient(spec.command, spec.args, env=spec.env)
+                    )
+                    tools.extend(connect_mcp_tools(client))
+                except Exception as error:
+                    logging.getLogger(__name__).warning(
+                        "Connector '%s' is unavailable: %s", name, error
+                    )
 
         return AgentRunner(provider, tools, approver=approver)
 
