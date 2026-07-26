@@ -29,6 +29,7 @@ from interfaces.web import (
     methodology_pages,
     pages,
     task_pages,
+    techniques_pages,
 )
 from interfaces.web.layout import error_page
 from interfaces.web.multipart import boundary_of, parse
@@ -118,6 +119,7 @@ class ReviewApp:
         tasks=None,
         connections=None,
         workspace=None,
+        techniques=None,
     ) -> None:
         self._service = service
         self._projects = projects
@@ -128,6 +130,7 @@ class ReviewApp:
         self._tasks = tasks
         self._connections = connections
         self._workspace = workspace
+        self._technique_repo = techniques
 
         self._get_routes = [
             (re.compile(r"^/$"), self._engagements),
@@ -146,6 +149,16 @@ class ReviewApp:
             (
                 re.compile(r"^/methodologies/(?P<key>[\w-]+)$"),
                 self._methodology,
+            ),
+            (re.compile(r"^/techniques$"), self._techniques_index),
+            (re.compile(r"^/techniques/new$"), self._new_technique),
+            (
+                re.compile(r"^/techniques/(?P<key>[\w-]+)/template$"),
+                self._technique_template,
+            ),
+            (
+                re.compile(r"^/techniques/(?P<key>[\w-]+)$"),
+                self._technique_edit,
             ),
             (re.compile(r"^/tasks$"), self._tasks_index),
             (re.compile(r"^/tasks/new$"), self._new_task),
@@ -236,6 +249,15 @@ class ReviewApp:
             (
                 re.compile(r"^/connections/(?P<key>[\w-]+)/disconnect$"),
                 self._disconnect,
+            ),
+            (re.compile(r"^/techniques$"), self._create_technique),
+            (
+                re.compile(r"^/techniques/(?P<key>[\w-]+)/delete$"),
+                self._delete_technique,
+            ),
+            (
+                re.compile(r"^/techniques/(?P<key>[\w-]+)$"),
+                self._update_technique,
             ),
             (
                 re.compile(
@@ -420,21 +442,28 @@ class ReviewApp:
         )
 
     def upload(self, path: str, fields, files) -> tuple[int, str]:
-        """Handle a multipart POST: a new task with files, or files for one."""
-        tasks = self._require_tasks()
-
+        """Handle a multipart POST: a new task, files for a task, or a template."""
         if path == "/tasks":
             prompt = (fields.get("prompt") or "").strip()
             if not prompt:
                 return 400, error_page("A task needs a prompt.", code=400)
             priority = (fields.get("priority") or "medium").strip()
-            task_id = tasks.start(prompt, uploads=files, priority=priority)
+            task_id = self._require_tasks().start(
+                prompt, uploads=files, priority=priority
+            )
             return 303, f"/tasks/{task_id}"
 
         match = re.match(r"^/tasks/([0-9a-f-]{36})/upload$", path)
         if match:
-            tasks.save_uploads(UUID(match.group(1)), files)
+            self._require_tasks().save_uploads(UUID(match.group(1)), files)
             return 303, f"/tasks/{match.group(1)}"
+
+        technique = re.match(r"^/techniques/([\w-]+)/template$", path)
+        if technique and files:
+            self._require_technique_repo().save_template(
+                technique.group(1), files[0][1]
+            )
+            return 303, f"/techniques/{technique.group(1)}"
 
         return 404, error_page(f"Unknown path '{path}'.")
 
@@ -720,6 +749,67 @@ class ReviewApp:
         return 200, methodology_pages.methodology_detail(
             self._methodologies.get(key),
             self._methodologies.techniques(),
+        )
+
+    # --------------------------------------------------------- techniques
+
+    def _require_technique_repo(self):
+        if self._technique_repo is None:
+            raise RuntimeError("This interface has no technique library.")
+
+        return self._technique_repo
+
+    def _techniques_index(self, query):
+        return 200, techniques_pages.techniques_index(
+            self._require_technique_repo().list()
+        )
+
+    def _new_technique(self, query):
+        self._require_technique_repo()
+        return 200, techniques_pages.technique_form()
+
+    def _technique_edit(self, query, key):
+        technique = self._require_technique_repo().get(key)
+        if technique is None:
+            return 404, error_page(f"No technique '{key}'.")
+        return 200, techniques_pages.technique_form(technique)
+
+    def _create_technique(self, form):
+        return self._save_technique(form, form.get("key", [""])[0])
+
+    def _update_technique(self, form, key):
+        return self._save_technique(form, key)
+
+    def _save_technique(self, form, key):
+        from core.methodologies.technique import Technique
+
+        technique = Technique(
+            key=key.strip().lower(),
+            name=form.get("name", [""])[0].strip(),
+            description=form.get("description", [""])[0].strip(),
+            guidance=form.get("guidance", [""])[0].strip(),
+            capabilities=frozenset(
+                cap.strip().upper() for cap in form.get("capabilities", [])
+            ),
+        )
+        # save() validates capabilities; a bad one becomes a 400 via _dispatch.
+        self._require_technique_repo().save(technique)
+
+        return 303, f"/techniques/{technique.key}"
+
+    def _delete_technique(self, form, key):
+        self._require_technique_repo().delete(key)
+        return 303, "/techniques"
+
+    def _technique_template(self, query, key):
+        data = self._require_technique_repo().template_bytes(key)
+        if data is None:
+            return 404, error_page(f"No template for technique '{key}'.")
+
+        return 200, Download(
+            content=data,
+            filename=f"{key}.md",
+            media_type="text/markdown; charset=utf-8",
         )
 
 

@@ -21,6 +21,9 @@ class Technique:
     description: str = ""
     guidance: str = ""
     capabilities: frozenset[str] = field(default_factory=frozenset)
+    #: An optional Markdown template the technique's output should follow,
+    #: loaded from a file that can be downloaded, edited and uploaded.
+    template: str = ""
 
     def applies_to(self, capability_key: str) -> bool:
         if not self.capabilities:

@@ -137,6 +137,16 @@ class ActivityPromptBuilder:
         if technique.guidance:
             blocks.extend([technique.guidance, ""])
 
+        if getattr(technique, "template", ""):
+            blocks.extend(
+                [
+                    "Follow this template for the output of the technique:",
+                    "",
+                    technique.template,
+                    "",
+                ]
+            )
+
         return "\n".join(blocks)
 
     def _revision_section(self, version: DeliverableVersion | None) -> str:

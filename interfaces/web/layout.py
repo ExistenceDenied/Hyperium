@@ -95,6 +95,7 @@ _NAV = (
     ("/connections", "Connect", "connections"),
     ("/missions", "Backlog", "backlog"),
     ("/methodologies", "Methodologies", "methodologies"),
+    ("/techniques", "Techniques", "techniques"),
 )
 
 

@@ -101,9 +101,19 @@ class JsonMethodologyRepository:
 
         for path in sorted(directory.glob("*.json")):
             payload = self._read(path)
+            key = str(payload["key"]).strip().lower()
+
+            # A technique may have a Markdown template beside it; it is loaded
+            # so an activity performing the technique produces the right shape.
+            template_path = directory / "templates" / f"{key}.md"
+            template = (
+                template_path.read_text(encoding="utf-8")
+                if template_path.is_file()
+                else ""
+            )
 
             technique = Technique(
-                key=str(payload["key"]).strip().lower(),
+                key=key,
                 name=payload["name"],
                 description=payload.get("description", ""),
                 guidance=payload.get("guidance", ""),
@@ -111,6 +121,7 @@ class JsonMethodologyRepository:
                     str(item).strip().upper()
                     for item in payload.get("capabilities", [])
                 ),
+                template=template,
             )
 
             self._techniques[technique.key] = technique

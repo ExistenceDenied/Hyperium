@@ -766,6 +766,7 @@ def build_web_task_runner(settings: Settings):
 
 def command_serve(args, settings: Settings) -> int:
     from infrastructure.connectors import ConnectionStore
+    from infrastructure.methodologies.technique_repository import TechniqueRepository
     from interfaces.web.server import ReviewApp, serve
 
     service, repository = build_context(settings)
@@ -779,6 +780,7 @@ def command_serve(args, settings: Settings) -> int:
         tasks=build_web_task_runner(settings),
         connections=ConnectionStore(settings.state_directory / "connections.json"),
         workspace=settings.workspace,
+        techniques=TechniqueRepository(BUILTIN_ROOT / "techniques"),
     )
 
     httpd = serve(app, host=args.host, port=args.port)
