@@ -65,6 +65,10 @@ class TaskRecord:
     methodology: str = ""
     #: True while the task is in the queue, waiting for the worker to launch it.
     queued: bool = False
+    #: Where the task came from, when it should feed a result back — e.g. an
+    #: email that spawned it: {"type": "email", "message_id", "sender",
+    #: "subject"}. On completion the deliverable is replied back to that source.
+    origin: dict[str, str] | None = None
     #: Earlier turns of this task's thread. The current turn is `prompt` and
     #: `result`; each reply pushes the previous turn here.
     history: list[Exchange] = field(default_factory=list)

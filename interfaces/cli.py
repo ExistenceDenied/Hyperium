@@ -724,7 +724,7 @@ def command_submit(args, settings: Settings) -> int:
     return 0
 
 
-def build_web_task_runner(settings: Settings, notify=None):
+def build_web_task_runner(settings: Settings, notify=None, deliver=None):
     """The browser's task runner: agent runs with web-mediated approval."""
     from application.agent.agent_runner import AgentRunner
     from application.review.task_reviewer import TaskReviewer
@@ -814,6 +814,7 @@ def build_web_task_runner(settings: Settings, notify=None):
         context=memory.as_context,
         reviewer=task_reviewer.review,
         notify=notify,
+        deliver=deliver,
     )
 
 
@@ -889,15 +890,41 @@ def command_serve(args, settings: Settings) -> int:
     service, repository = build_context(settings)
 
     notifications = NotificationStore(settings.state_directory / "notifications.json")
+    rules = RuleStore(settings.state_directory / "rules.json")
 
-    tasks = build_web_task_runner(settings, notify=notifications.add)
+    def deliver_to_origin(origin, folder):
+        """Reply to the email that spawned a task, attaching what it produced."""
+        if not origin or origin.get("type") != "email":
+            return
+        from application.email.email_delivery import EmailDelivery
+        from infrastructure.email.ms365_mail import Ms365MailProvider
+        from infrastructure.mcp.mcp_client import McpClient
+
+        spec = ConnectionStore(
+            settings.state_directory / "connections.json"
+        ).specs().get("outlook")
+        if spec is None:
+            return
+        try:
+            with McpClient(spec.command, spec.args, env=spec.env) as client:
+                EmailDelivery(
+                    Ms365MailProvider(client.call_tool),
+                    rules=rules.rule_set,
+                    can_send=lambda: rules.sending_enabled,
+                    notify=notifications.add,
+                ).deliver(origin, folder)
+        except Exception:
+            logging.getLogger(__name__).warning("Delivering to email origin failed.")
+
+    tasks = build_web_task_runner(
+        settings, notify=notifications.add, deliver=deliver_to_origin
+    )
     tasks.start_worker()  # continuously launch queued tasks in the background
 
     schedules = ScheduleStore(settings.state_directory / "schedules.json")
     Scheduler(schedules, tasks.queue).start()  # run due schedules on a clock
 
     inbox = InboxStore(settings.state_directory / "inbox.json")
-    rules = RuleStore(settings.state_directory / "rules.json")
     # Triage the folder, apply rules (draft unless a rule sends), queue work.
     start_inbox_worker(settings, inbox, notifications, tasks.queue)
 

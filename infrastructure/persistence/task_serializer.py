@@ -30,6 +30,7 @@ class TaskSerializer:
             "technique": record.technique,
             "methodology": record.methodology,
             "queued": record.queued,
+            "origin": record.origin,
             "completed_at": (
                 record.completed_at.isoformat() if record.completed_at else None
             ),
@@ -61,6 +62,7 @@ class TaskSerializer:
             technique=payload.get("technique", ""),
             methodology=payload.get("methodology", ""),
             queued=payload.get("queued", False),
+            origin=payload.get("origin"),
             completed_at=datetime.fromisoformat(completed) if completed else None,
             notes=[
                 Note(text=note["text"], at=datetime.fromisoformat(note["at"]))

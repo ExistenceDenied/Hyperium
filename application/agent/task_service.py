@@ -8,7 +8,13 @@ from core.agents.task_record import TaskRecord
 
 # The tools that produce a file, each keyed under a "path" argument. Used to
 # work out where a task's deliverable ended up, so a person can open it.
-_FILE_TOOLS = {"write_file", "write_excel", "update_excel_cell"}
+_FILE_TOOLS = {
+    "write_file",
+    "write_excel",
+    "update_excel_cell",
+    "write_word",
+    "write_powerpoint",
+}
 
 
 def deliverables_from(steps, root=None) -> list[str]:

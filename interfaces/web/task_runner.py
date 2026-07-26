@@ -86,6 +86,8 @@ class _Run:
     artifacts: list[str] = field(default_factory=list)
     #: Earlier finished turns, when this run is a reply continuing a thread.
     history: list[Exchange] = field(default_factory=list)
+    #: Where the task came from, so a deliverable can be fed back there.
+    origin: dict | None = None
 
 
 @dataclass
@@ -130,6 +132,7 @@ class WebTaskRunner:
         reviewer=None,
         max_concurrent=1,
         notify=None,
+        deliver=None,
     ) -> None:
         self._build_runner = build_runner
         self._repository = repository
@@ -145,6 +148,9 @@ class WebTaskRunner:
         self._max_concurrent = max_concurrent
         # notify(kind, text, link) -> record an alert for the person.
         self._notify = notify or (lambda kind, text, link="": None)
+        # deliver(origin, folder) -> feed a finished deliverable back to where the
+        # task came from (e.g. reply to the email that spawned it, attaching it).
+        self._deliver = deliver or (lambda origin, folder: None)
         self._runs: dict[UUID, _Run] = {}
         self._lock = threading.Lock()
 
@@ -178,6 +184,7 @@ class WebTaskRunner:
         technique: str = "",
         methodology: str = "",
         history=None,
+        origin=None,
     ) -> UUID:
         task_id = task_id or uuid4()
         self.folder(task_id).mkdir(parents=True, exist_ok=True)
@@ -200,6 +207,7 @@ class WebTaskRunner:
             technique=technique,
             methodology=methodology,
             history=list(history or []),
+            origin=origin,
         )
 
         with self._lock:
@@ -216,6 +224,7 @@ class WebTaskRunner:
         priority: str = "medium",
         technique: str = "",
         methodology: str = "",
+        origin=None,
     ) -> UUID:
         """Add a task to the queue for the worker to launch, rather than now."""
         task_id = uuid4()
@@ -232,6 +241,7 @@ class WebTaskRunner:
                 technique=technique,
                 methodology=methodology,
                 queued=True,
+                origin=origin,
             )
         )
         return task_id
@@ -501,6 +511,7 @@ class WebTaskRunner:
                 prior = None
             existing = prior.notes if prior else []
             history = run.history or (prior.history if prior else [])
+            origin = run.origin or (prior.origin if prior else None)
             # Persist before flipping the view to done, so a reader that sees
             # "completed" can always load the saved record.
             self._repository.save(
@@ -516,6 +527,7 @@ class WebTaskRunner:
                     completed_at=datetime.now(timezone.utc),
                     notes=existing,
                     history=list(history),
+                    origin=origin,
                 )
             )
             run.result = result
@@ -524,6 +536,13 @@ class WebTaskRunner:
                 f"Task finished: {run.prompt[:70]}",
                 f"/tasks/{run.id}",
             )
+            # Feed the deliverable back to where the task came from (e.g. reply
+            # to the originating email, attaching what was produced).
+            if origin:
+                try:
+                    self._deliver(origin, self.folder(run.id))
+                except Exception:
+                    logger.exception("Delivering task %s to its origin failed.", run.id)
         except Exception as error:
             logger.exception("Web task %s failed.", run.id)
             run.error = str(error)

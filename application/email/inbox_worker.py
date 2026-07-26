@@ -95,6 +95,12 @@ class InboxWorker:
             self._enqueue(
                 f"{task}\n\n(From an email: {message.subject} — {message.sender})",
                 priority=decision.priority,
+                origin={
+                    "type": "email",
+                    "message_id": message.id,
+                    "sender": message.sender,
+                    "subject": message.subject,
+                },
             )
             actions.append(f"queued task: {task}")
             self._notify("task", f"From email: {task}", "/tasks")
