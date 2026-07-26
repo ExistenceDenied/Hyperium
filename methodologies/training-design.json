@@ -1,0 +1,162 @@
+{
+  "key": "training-design",
+  "name": "Training Design",
+  "description": "Design and build a facilitator-ready training pack: an audience profile and measurable learning objectives, a timed agenda, module content, a slide outline, exercises and case studies, a facilitator guide, and an assessment. The mission supplies the subject and audience; the methodology supplies the shape of a professional one-day course.",
+  "version": "1.0",
+  "discipline": "Learning and Development",
+  "principles": [
+    "Start from what the learner must be able to DO, not from what to cover.",
+    "Every module maps to a stated learning objective.",
+    "Adults learn by doing: pair every concept with practice.",
+    "Time the day realistically; an agenda that cannot fit the clock is fiction.",
+    "A course a facilitator cannot run from the guide is not finished."
+  ],
+  "stages": [
+    {
+      "key": "design",
+      "name": "Design",
+      "description": "Decide who the training is for, what they must be able to do by the end, and how the day is shaped to get them there.",
+      "depends_on": [],
+      "quality_gate": {
+        "description": "Design is complete when the audience, measurable learning objectives, and a timed agenda are all in place.",
+        "require_approval": true,
+        "minimum_words": 150,
+        "required_sections": ["Objectives"]
+      },
+      "deliverables": [
+        {
+          "key": "training-plan",
+          "name": "Training Plan",
+          "description": "The audience, the learning objectives, and a realistic timed agenda for the day.",
+          "sections": ["Audience", "Learning objectives", "Agenda"],
+          "activities": [
+            {
+              "key": "profile-audience",
+              "name": "Profile the audience",
+              "description": "Describe who attends: their role, current level, and what they need to be able to do afterwards.",
+              "capabilities": ["RESEARCH", "BUSINESS_ANALYSIS"],
+              "depends_on": []
+            },
+            {
+              "key": "define-learning-objectives",
+              "name": "Define learning objectives",
+              "description": "Write measurable learning objectives, each an observable thing the learner can do by the end of the day.",
+              "capabilities": ["BUSINESS_ANALYSIS", "TECHNICAL_WRITING"],
+              "depends_on": ["profile-audience"]
+            },
+            {
+              "key": "design-agenda",
+              "name": "Design the agenda",
+              "description": "Lay out a timed agenda for a full day, mapping each block to a learning objective, with breaks and realistic durations.",
+              "capabilities": ["TECHNICAL_WRITING"],
+              "depends_on": ["define-learning-objectives"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "build",
+      "name": "Build",
+      "description": "Produce the teaching material: the content of each module, the slides that carry it, and the exercises that make it stick.",
+      "depends_on": ["design"],
+      "quality_gate": {
+        "description": "Build is complete when the modules, a slide outline, and hands-on exercises all exist.",
+        "require_approval": true,
+        "minimum_words": 150,
+        "required_sections": []
+      },
+      "deliverables": [
+        {
+          "key": "module-content",
+          "name": "Module Content",
+          "description": "The substance of the training: each module's teaching content, worked examples, and key takeaways, in the order the agenda runs.",
+          "sections": ["Modules", "Worked examples", "Key takeaways"],
+          "activities": [
+            {
+              "key": "write-module-content",
+              "name": "Write the module content",
+              "description": "For each agenda block, write the teaching content: concepts, worked examples, and the key takeaways the learner leaves with.",
+              "capabilities": ["TECHNICAL_WRITING", "BUSINESS_ANALYSIS"],
+              "depends_on": ["define-learning-objectives", "design-agenda"]
+            }
+          ]
+        },
+        {
+          "key": "slide-outline",
+          "name": "Slide Deck Outline",
+          "description": "A slide-by-slide outline of the deck that carries the modules, with the point each slide makes and its speaker note.",
+          "sections": ["Slides", "Speaker notes"],
+          "activities": [
+            {
+              "key": "outline-slides",
+              "name": "Outline the slide deck",
+              "description": "Produce a slide-by-slide outline: for each slide give its title, the single point it makes, and a speaker note. Keep slides sparse.",
+              "capabilities": ["PRESENTATION_DESIGN", "TECHNICAL_WRITING"],
+              "depends_on": ["write-module-content"]
+            }
+          ]
+        },
+        {
+          "key": "exercises",
+          "name": "Exercises and Case Studies",
+          "description": "Hands-on practice: exercises and a running case study that make learners apply each objective, with model answers.",
+          "sections": ["Exercises", "Case study", "Model answers"],
+          "activities": [
+            {
+              "key": "design-exercises",
+              "name": "Design the exercises",
+              "description": "Create exercises and a running case study that make learners practise each objective, each with instructions, timing, and a model answer.",
+              "capabilities": ["BUSINESS_ANALYSIS", "TECHNICAL_WRITING"],
+              "depends_on": ["define-learning-objectives"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "package",
+      "name": "Package",
+      "description": "Turn the material into something a facilitator can run and a sponsor can measure.",
+      "depends_on": ["build"],
+      "quality_gate": {
+        "description": "Packaging is complete when a facilitator could run the day from the guide and the learning can be assessed.",
+        "require_approval": true,
+        "minimum_words": 150,
+        "required_sections": []
+      },
+      "deliverables": [
+        {
+          "key": "facilitator-guide",
+          "name": "Facilitator Guide",
+          "description": "The run-sheet a trainer follows: what to do and say in each block, timings, transitions, and facilitation tips.",
+          "sections": ["Run sheet", "Timings", "Facilitation tips"],
+          "activities": [
+            {
+              "key": "write-facilitator-guide",
+              "name": "Write the facilitator guide",
+              "description": "Write a block-by-block run sheet a facilitator can deliver from: what to cover, how long it takes, how to run each exercise, and tips for common difficulties.",
+              "capabilities": ["TECHNICAL_WRITING"],
+              "depends_on": ["write-module-content", "design-exercises", "outline-slides"]
+            }
+          ]
+        },
+        {
+          "key": "assessment",
+          "name": "Assessment and Feedback",
+          "description": "How you know the training worked: a knowledge check against the objectives and a feedback form.",
+          "sections": ["Knowledge check", "Feedback form"],
+          "activities": [
+            {
+              "key": "design-assessment",
+              "name": "Design the assessment",
+              "description": "Create a short knowledge check mapped to the learning objectives, plus an end-of-day feedback form.",
+              "capabilities": ["BUSINESS_ANALYSIS", "TECHNICAL_WRITING"],
+              "depends_on": ["define-learning-objectives"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -64,8 +64,8 @@ def build_activity_executor(settings: Settings):
     )
 
 
-def build_context(settings: Settings):
-    provider = ResilientProvider(
+def build_llm(settings: Settings) -> ResilientProvider:
+    return ResilientProvider(
         OllamaProvider(
             model=settings.model,
             timeout_seconds=settings.llm_timeout_seconds,
@@ -74,6 +74,37 @@ def build_context(settings: Settings):
         attempts=settings.llm_attempts,
         backoff_seconds=settings.llm_backoff_seconds,
     )
+
+
+def run_autonomously(args, settings: Settings, project):
+    """Review and iterate an engagement to completion with no human in the loop."""
+    from application.project.autonomous_runner import AutonomousRunner
+    from application.review.quality_reviewer import QualityReviewer
+
+    service, _ = build_context(settings)
+    reviewer = QualityReviewer(build_llm(settings))
+
+    outcome = AutonomousRunner(
+        service, reviewer, max_revisions=args.max_revisions
+    ).run(project)
+
+    print("\nAutonomous review log:")
+    for decision in outcome.decisions:
+        note = decision.feedback.replace("\n", " ")[:80]
+        print(f"  [{decision.decision:<11}] {decision.deliverable}: {note}")
+
+    if outcome.halted_on:
+        print(
+            f"\nHalted: '{outcome.halted_on}' did not pass review within "
+            f"{args.max_revisions} revisions. It is left for you to decide.",
+            file=sys.stderr,
+        )
+
+    return outcome.project
+
+
+def build_context(settings: Settings):
+    provider = build_llm(settings)
 
     methodologies = build_methodologies(settings)
 
@@ -384,6 +415,9 @@ def command_launch(args, settings: Settings) -> int:
         resources=[default_resource(settings)],
     )
 
+    if getattr(args, "autonomous", False):
+        project = run_autonomously(args, settings, project)
+
     report(project)
 
     return 0
@@ -408,7 +442,12 @@ def command_run(args, settings: Settings) -> int:
         methodology=args.methodology,
     )
 
-    report(backlog.launch(mission.id, resources=[default_resource(settings)]))
+    project = backlog.launch(mission.id, resources=[default_resource(settings)])
+
+    if getattr(args, "autonomous", False):
+        project = run_autonomously(args, settings, project)
+
+    report(project)
 
     return 0
 
@@ -702,6 +741,27 @@ def command_serve(args, settings: Settings) -> int:
     return 0
 
 
+def command_export(args, settings: Settings) -> int:
+    """Bundle an engagement's deliverables into one print-ready HTML pack."""
+    from interfaces.pack import build_html_pack
+
+    _, repository = build_context(settings)
+    project = repository.load(UUID(args.project_id))
+
+    output = (
+        Path(args.output)
+        if args.output
+        else settings.workspace / f"pack-{project.id}.html"
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(build_html_pack(project), encoding="utf-8")
+
+    print(f"Wrote the pack to {output}")
+    print("Open it in a browser to present it, or print to PDF to hand it over.")
+
+    return 0
+
+
 def command_list(args, settings: Settings) -> int:
     _, repository = build_context(settings)
 
@@ -743,6 +803,22 @@ def command_show(args, settings: Settings) -> int:
 
     report(project)
     return 0
+
+
+def _add_autonomous_args(parser: argparse.ArgumentParser) -> None:
+    """Flags shared by `run` and `launch` for an unattended, self-reviewed run."""
+    parser.add_argument(
+        "--autonomous",
+        action="store_true",
+        help="Review and iterate each deliverable with no human in the loop.",
+    )
+    parser.add_argument(
+        "--max-revisions",
+        type=int,
+        default=2,
+        dest="max_revisions",
+        help="Revisions the reviewer may request per deliverable before it stops.",
+    )
 
 
 def _add_agent_run_args(parser: argparse.ArgumentParser) -> None:
@@ -864,6 +940,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     launch = sub.add_parser("launch", help="Run a mission from the backlog.")
     launch.add_argument("mission_id")
+    _add_autonomous_args(launch)
 
     run = sub.add_parser(
         "run",
@@ -878,6 +955,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         help="A success criterion. May be repeated.",
     )
+    _add_autonomous_args(run)
 
     do = sub.add_parser(
         "do",
@@ -934,6 +1012,15 @@ def build_parser() -> argparse.ArgumentParser:
     show = sub.add_parser("show", help="Show an engagement or a deliverable.")
     show.add_argument("project_id")
     show.add_argument("deliverable", nargs="?", default=None)
+
+    export = sub.add_parser(
+        "export",
+        help="Bundle an engagement's deliverables into one HTML pack.",
+    )
+    export.add_argument("project_id")
+    export.add_argument(
+        "--output", default=None, help="Where to write the pack (default: workspace)."
+    )
 
     return parser
 
@@ -997,6 +1084,7 @@ def main(argv: list[str] | None = None) -> int:
         "reject": lambda: command_review(args, settings, approve=False),
         "list": lambda: command_list(args, settings),
         "show": lambda: command_show(args, settings),
+        "export": lambda: command_export(args, settings),
     }
 
     try:
