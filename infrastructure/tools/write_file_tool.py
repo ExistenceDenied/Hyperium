@@ -29,7 +29,6 @@ class WriteFileTool(Tool):
         },
         "required": ["path", "content"],
     }
-    requires_approval = True
 
     def __init__(self, root: Path) -> None:
         self._root = root.resolve()

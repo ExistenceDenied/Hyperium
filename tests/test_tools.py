@@ -68,10 +68,11 @@ def test_write_file_refuses_to_escape_root(tmp_path):
     assert not (tmp_path / "escape.txt").exists()
 
 
-def test_write_file_requires_approval_and_previews_the_effect(tmp_path):
+def test_write_file_acts_without_approval_but_still_previews(tmp_path):
     tool = WriteFileTool(tmp_path)
 
-    assert tool.requires_approval is True
+    # Writes to the task's own folder run autonomously — no approval prompt.
+    assert tool.requires_approval is False
     preview = tool.preview({"path": "notes.txt", "content": "abcd"})
     assert "Create" in preview
     assert "notes.txt" in preview

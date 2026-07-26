@@ -46,15 +46,14 @@ def read_only_tools(root: Path, *, timeout_seconds: float = 30.0) -> list[Tool]:
 
 def writable_tools(root: Path, *, timeout_seconds: float = 30.0) -> list[Tool]:
     """
-    The read-only tools plus those that change the filesystem.
+    The read-only tools plus those that write files.
 
-    The side-effecting tools here declare ``requires_approval``, so the runner
-    routes each invocation through its approver. Handing these to a runner
-    without an approver is safe: the default policy denies every side effect.
-    Excel produce/update is here too, so an agent can build and revise a
-    spreadsheet — an invoice, a quote, a tracker — under approval, and Word and
-    PowerPoint so it can actually deliver a document or a deck rather than
-    saying it cannot.
+    These write only inside ``root`` — the task's own folder — so they act
+    without approval: the point is that the agent produces its deliverables
+    autonomously, and the folder confinement is the boundary, not a prompt. A
+    file, a spreadsheet, a Word document or a PowerPoint deck all land in the
+    task's directory. (Connector tools, which act on the outside world, keep
+    their approval gate.)
     """
     return [
         *read_only_tools(root, timeout_seconds=timeout_seconds),

@@ -86,7 +86,6 @@ class WriteExcelTool(Tool):
         },
         "required": ["path", "rows"],
     }
-    requires_approval = True
 
     def __init__(self, root: Path) -> None:
         self._root = root.resolve()
@@ -153,7 +152,6 @@ class UpdateExcelCellTool(Tool):
         },
         "required": ["path", "cell", "value"],
     }
-    requires_approval = True
 
     def __init__(self, root: Path) -> None:
         self._root = root.resolve()

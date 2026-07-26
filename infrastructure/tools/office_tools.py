@@ -30,7 +30,6 @@ class WritePowerPointTool(Tool):
         },
         "required": ["path", "title", "content"],
     }
-    requires_approval = True
 
     def __init__(self, root: Path) -> None:
         self._root = root.resolve()
@@ -67,7 +66,6 @@ class WriteWordTool(Tool):
         },
         "required": ["path", "title", "content"],
     }
-    requires_approval = True
 
     def __init__(self, root: Path) -> None:
         self._root = root.resolve()

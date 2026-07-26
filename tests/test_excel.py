@@ -42,9 +42,10 @@ def test_agent_can_update_a_cell(tmp_path):
     assert "45" in read
 
 
-def test_writes_require_approval_but_reads_do_not(tmp_path):
-    assert WriteExcelTool(tmp_path).requires_approval is True
-    assert UpdateExcelCellTool(tmp_path).requires_approval is True
+def test_excel_tools_act_without_approval(tmp_path):
+    # File writes are confined to the task folder and run autonomously.
+    assert WriteExcelTool(tmp_path).requires_approval is False
+    assert UpdateExcelCellTool(tmp_path).requires_approval is False
     assert ReadExcelTool(tmp_path).requires_approval is False
 
 
