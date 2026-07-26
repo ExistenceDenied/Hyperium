@@ -798,6 +798,9 @@ def command_export(args, settings: Settings) -> int:
             elif fmt == "docx":
                 path = base.with_suffix(".docx")
                 path.write_bytes(office.to_docx(deliverable.name, version.content))
+            elif fmt == "eml":
+                path = base.with_suffix(".eml")
+                path.write_bytes(office.to_eml(deliverable.name, version.content))
             else:
                 path = base.with_suffix(".md")
                 path.write_text(version.content, encoding="utf-8")
@@ -1079,7 +1082,7 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument(
         "--format",
         default="auto",
-        choices=["auto", "docx", "pptx", "markdown"],
+        choices=["auto", "docx", "pptx", "eml", "markdown"],
         help="Force a format for every deliverable, or 'auto' per the methodology.",
     )
 

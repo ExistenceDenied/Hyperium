@@ -5,7 +5,7 @@ import io
 from infrastructure.methodologies.json_methodology_repository import (
     JsonMethodologyRepository,
 )
-from interfaces.office import parse_blocks, to_docx, to_pptx
+from interfaces.office import parse_blocks, to_docx, to_eml, to_pptx
 
 SAMPLE = """# Report Title
 
@@ -80,6 +80,31 @@ def test_to_pptx_produces_one_slide_per_heading():
         if slide.has_notes_slide
     ]
     assert any("keep it short" in note for note in notes)
+
+
+def test_to_eml_is_a_readable_draft_with_both_body_parts():
+    import email
+
+    data = to_eml(
+        "Briefing",
+        "Subject: Kickoff on Monday\n\nHello team,\n\n- one\n- two",
+    )
+    message = email.message_from_bytes(data)
+
+    assert message["Subject"] == "Kickoff on Monday"
+    types = {part.get_content_type() for part in message.walk()}
+    assert "text/plain" in types
+    assert "text/html" in types
+    # No recipient: it is a draft to be addressed and sent by a person.
+    assert message["To"] is None
+
+
+def test_to_eml_uses_the_title_when_there_is_no_subject_line():
+    import email
+
+    message = email.message_from_bytes(to_eml("My Deliverable", "Just a body."))
+
+    assert message["Subject"] == "My Deliverable"
 
 
 def test_methodology_declares_a_slide_format():
