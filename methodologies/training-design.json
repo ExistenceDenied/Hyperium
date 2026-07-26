@@ -29,6 +29,7 @@
           "name": "Training Plan",
           "description": "The audience, the learning objectives, and a realistic timed agenda for the day.",
           "sections": ["Audience", "Learning objectives", "Agenda"],
+          "format": "docx",
           "activities": [
             {
               "key": "profile-audience",
@@ -72,6 +73,7 @@
           "name": "Module Content",
           "description": "The substance of the training: each module's teaching content, worked examples, and key takeaways, in the order the agenda runs.",
           "sections": ["Modules", "Worked examples", "Key takeaways"],
+          "format": "docx",
           "activities": [
             {
               "key": "write-module-content",
@@ -87,6 +89,7 @@
           "name": "Slide Deck Outline",
           "description": "A slide-by-slide outline of the deck that carries the modules, with the point each slide makes and its speaker note.",
           "sections": ["Slides", "Speaker notes"],
+          "format": "pptx",
           "activities": [
             {
               "key": "outline-slides",
@@ -102,6 +105,7 @@
           "name": "Exercises and Case Studies",
           "description": "Hands-on practice: exercises and a running case study that make learners apply each objective, with model answers.",
           "sections": ["Exercises", "Case study", "Model answers"],
+          "format": "docx",
           "activities": [
             {
               "key": "design-exercises",
@@ -131,6 +135,7 @@
           "name": "Facilitator Guide",
           "description": "The run-sheet a trainer follows: what to do and say in each block, timings, transitions, and facilitation tips.",
           "sections": ["Run sheet", "Timings", "Facilitation tips"],
+          "format": "docx",
           "activities": [
             {
               "key": "write-facilitator-guide",
@@ -146,6 +151,7 @@
           "name": "Assessment and Feedback",
           "description": "How you know the training worked: a knowledge check against the objectives and a feedback form.",
           "sections": ["Knowledge check", "Feedback form"],
+          "format": "docx",
           "activities": [
             {
               "key": "design-assessment",

@@ -12,6 +12,18 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
 ]
+# Browser-driven checks of the web interface. Kept separate from `dev` because
+# it pulls a browser down: the unit suite must stay runnable without it, and
+# CI installs only `dev`.
+ui = [
+    "playwright>=1.40",
+]
+# Native deliverable formats (Word, PowerPoint). Optional because a run and the
+# unit suite do not need them: without the extra, export falls back to Markdown.
+office = [
+    "python-docx>=1.1",
+    "python-pptx>=0.6",
+]
 
 [project.scripts]
 hyperium = "interfaces.cli:main"

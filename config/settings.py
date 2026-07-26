@@ -31,6 +31,9 @@ class Settings:
     """
 
     model: str = "qwen3:latest"
+    # The reviewer can use a sharper model than the worker: review runs less
+    # often, and it sets the quality bar. Empty means "same as `model`".
+    review_model: str = ""
     temperature: float = 0.2
     workspace: Path = Path("workspace")
     state_directory: Path = Path("workspace/.hyperium")
@@ -46,6 +49,7 @@ class Settings:
     def load(cls) -> "Settings":
         return cls(
             model=_env("MODEL", cls.model),
+            review_model=_env("REVIEW_MODEL", cls.review_model),
             temperature=_env_float("TEMPERATURE", cls.temperature),
             workspace=Path(_env("WORKSPACE", str(cls.workspace))),
             state_directory=Path(_env("STATE_DIR", str(cls.state_directory))),

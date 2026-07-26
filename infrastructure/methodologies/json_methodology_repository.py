@@ -189,6 +189,7 @@ class JsonMethodologyRepository:
             name=payload.get("name", ""),
             description=payload.get("description", ""),
             sections=tuple(payload.get("sections", [])),
+            format=str(payload.get("format", "markdown")).strip().lower(),
             activities=tuple(
                 self._activity(entry) for entry in payload.get("activities", [])
             ),

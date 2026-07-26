@@ -41,6 +41,9 @@ class DeliverableTemplate:
     description: str = ""
     sections: tuple[str, ...] = field(default_factory=tuple)
     activities: tuple[ActivityTemplate, ...] = field(default_factory=tuple)
+    #: The file type a client receives: "markdown", "docx" or "pptx". Structure
+    #: only, like `sections` — it shapes the export, never the content.
+    format: str = "markdown"
 
 
 @dataclass(frozen=True)

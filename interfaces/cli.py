@@ -64,10 +64,10 @@ def build_activity_executor(settings: Settings):
     )
 
 
-def build_llm(settings: Settings) -> ResilientProvider:
+def build_llm(settings: Settings, model: str | None = None) -> ResilientProvider:
     return ResilientProvider(
         OllamaProvider(
-            model=settings.model,
+            model=model or settings.model,
             timeout_seconds=settings.llm_timeout_seconds,
             temperature=settings.temperature,
         ),
@@ -82,7 +82,7 @@ def run_autonomously(args, settings: Settings, project):
     from application.review.quality_reviewer import QualityReviewer
 
     service, _ = build_context(settings)
-    reviewer = QualityReviewer(build_llm(settings))
+    reviewer = QualityReviewer(build_llm(settings, settings.review_model or None))
 
     outcome = AutonomousRunner(
         service, reviewer, max_revisions=args.max_revisions
@@ -741,23 +741,78 @@ def command_serve(args, settings: Settings) -> int:
     return 0
 
 
+def deliverable_formats(project, settings: Settings) -> dict:
+    """Map each deliverable key to the file type its methodology declares."""
+    plan = project.execution_plan
+    key = plan.methodology_key if plan else None
+
+    if not key:
+        return {}
+
+    try:
+        methodology = build_methodologies(settings).get(key)
+    except (KeyError, FileNotFoundError):
+        return {}
+
+    return {item.key: (item.format or "markdown") for item in methodology.deliverables}
+
+
 def command_export(args, settings: Settings) -> int:
-    """Bundle an engagement's deliverables into one print-ready HTML pack."""
+    """
+    Export an engagement's deliverables as the file types clients receive.
+
+    Each deliverable is written in the format its methodology declares — Word,
+    PowerPoint or Markdown — into a folder, alongside a bundled HTML overview.
+    If the office dependency is missing, those deliverables fall back to
+    Markdown and the run says so rather than failing.
+    """
+    from interfaces import office
     from interfaces.pack import build_html_pack
 
     _, repository = build_context(settings)
     project = repository.load(UUID(args.project_id))
+    formats = deliverable_formats(project, settings)
 
-    output = (
-        Path(args.output)
-        if args.output
-        else settings.workspace / f"pack-{project.id}.html"
+    out_dir = (
+        Path(args.output) if args.output else settings.workspace / f"pack-{project.id}"
     )
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(build_html_pack(project), encoding="utf-8")
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Wrote the pack to {output}")
-    print("Open it in a browser to present it, or print to PDF to hand it over.")
+    written = []
+    for deliverable in project.deliverables:
+        version = deliverable.latest_version()
+        if version is None:
+            continue
+
+        fmt = (
+            args.format
+            if args.format != "auto"
+            else formats.get(deliverable.key, "docx")
+        )
+        base = out_dir / deliverable.key
+
+        try:
+            if fmt == "pptx":
+                path = base.with_suffix(".pptx")
+                path.write_bytes(office.to_pptx(deliverable.name, version.content))
+            elif fmt == "docx":
+                path = base.with_suffix(".docx")
+                path.write_bytes(office.to_docx(deliverable.name, version.content))
+            else:
+                path = base.with_suffix(".md")
+                path.write_text(version.content, encoding="utf-8")
+        except office.OfficeUnavailable as error:
+            path = base.with_suffix(".md")
+            path.write_text(version.content, encoding="utf-8")
+            print(f"  ({error} — wrote {deliverable.key}.md instead)", file=sys.stderr)
+
+        written.append(path.name)
+
+    (out_dir / "index.html").write_text(build_html_pack(project), encoding="utf-8")
+
+    print(f"Wrote {len(written)} deliverables + index.html to {out_dir}")
+    for name in written:
+        print(f"  - {name}")
 
     return 0
 
@@ -1019,7 +1074,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     export.add_argument("project_id")
     export.add_argument(
-        "--output", default=None, help="Where to write the pack (default: workspace)."
+        "--output", default=None, help="Folder to write the pack (default: workspace)."
+    )
+    export.add_argument(
+        "--format",
+        default="auto",
+        choices=["auto", "docx", "pptx", "markdown"],
+        help="Force a format for every deliverable, or 'auto' per the methodology.",
     )
 
     return parser
