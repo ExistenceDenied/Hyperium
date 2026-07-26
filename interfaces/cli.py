@@ -727,6 +727,7 @@ def command_submit(args, settings: Settings) -> int:
 def build_web_task_runner(settings: Settings, notify=None, deliver=None):
     """The browser's task runner: agent runs with web-mediated approval."""
     from application.agent.agent_runner import AgentRunner
+    from application.agent.quality_critic import QualityCritic
     from application.review.task_reviewer import TaskReviewer
     from infrastructure.connectors import ConnectionStore
     from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
@@ -815,6 +816,10 @@ def build_web_task_runner(settings: Settings, notify=None, deliver=None):
         reviewer=task_reviewer.review,
         notify=notify,
         deliver=deliver,
+        critic=QualityCritic(
+            build_llm(settings, settings.review_model or None, json_mode=True)
+        ).critique,
+        refine_passes=settings.refine_passes,
     )
 
 

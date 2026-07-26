@@ -23,6 +23,7 @@ from core.agents.agent_result import AgentResult, AgentStep
 from core.agents.approval import ActionRequest, ApprovalDecision
 from core.agents.task_record import Exchange, Note, TaskRecord
 from core.interfaces.approver import Approver
+from infrastructure.documents import read_text
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,8 @@ class WebTaskRunner:
         max_concurrent=1,
         notify=None,
         deliver=None,
+        critic=None,
+        refine_passes=0,
     ) -> None:
         self._build_runner = build_runner
         self._repository = repository
@@ -151,6 +154,10 @@ class WebTaskRunner:
         # deliver(origin, folder) -> feed a finished deliverable back to where the
         # task came from (e.g. reply to the email that spawned it, attaching it).
         self._deliver = deliver or (lambda origin, folder: None)
+        # critic(task, content) -> feedback to improve a deliverable, or "".
+        self._critic = critic
+        # How many draft -> critique -> revise passes to spend on a deliverable.
+        self._refine_passes = refine_passes
         self._runs: dict[UUID, _Run] = {}
         self._lock = threading.Lock()
 
@@ -493,6 +500,53 @@ class WebTaskRunner:
 
         return TaskView(run.id, run.prompt, "running", True, files=files)
 
+    def _refine(self, runner, run, result, root):
+        """
+        Draft -> critique -> revise, a few passes, to lift a deliverable.
+
+        Only runs when refinement is switched on and the task actually produced a
+        file; the critic reads the file's real content and either approves it or
+        returns concrete improvements the agent applies on the next pass. Trades
+        time for quality, so it is opt-in and confined to deliverable tasks.
+        """
+        if self._critic is None or self._refine_passes <= 0:
+            return result
+
+        files = deliverables_from(result.steps, root)
+        if not files:
+            return result
+        deliverable = Path(files[-1])
+
+        for i in range(self._refine_passes):
+            content = read_text(deliverable) if deliverable.is_file() else result.output
+            try:
+                feedback = self._critic(run.prompt, content)
+            except Exception:
+                logger.exception("Critic failed for %s.", run.id)
+                break
+            if not feedback:
+                break
+
+            self._notify(
+                "task",
+                f"Improving the deliverable (pass {i + 1}): {run.prompt[:50]}",
+                f"/tasks/{run.id}",
+            )
+            revise = (
+                self._prompt(run)
+                + "\n\nA reviewer read the deliverable you produced and asks you "
+                "to improve it:\n"
+                + feedback
+                + f"\n\nProduce an improved version and save it as "
+                f"'{deliverable.name}', replacing the old one."
+            )
+            result = runner.run(revise, system=self._system)
+            newer = deliverables_from(result.steps, root)
+            if newer:
+                deliverable = Path(newer[-1])
+
+        return result
+
     def _execute(self, run: _Run) -> None:
         try:
             root = self.folder(run.id)
@@ -500,6 +554,7 @@ class WebTaskRunner:
             with ExitStack() as stack:
                 runner = self._build_runner(run.approver, stack, root)
                 result = runner.run(self._prompt(run), system=self._system)
+                result = self._refine(runner, run, result, root)
 
             run.artifacts = deliverables_from(result.steps, root)
             # Keep notes added while the task ran, and stamp the finish time.

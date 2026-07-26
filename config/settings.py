@@ -55,6 +55,9 @@ class Settings:
     # deliverable tasks fail ("none of the functions apply"). The email worker
     # reaches Outlook directly, so this does not affect it.
     task_connectors: bool = False
+    # Draft -> critique -> revise passes spent improving a produced deliverable.
+    # 0 (default) is fastest; 1-2 trades time for noticeably better quality.
+    refine_passes: int = 0
 
     @classmethod
     def load(cls) -> "Settings":
@@ -80,4 +83,5 @@ class Settings:
                 "DEFAULT_METHODOLOGY", cls.default_methodology
             ),
             task_connectors=_env_bool("TASK_CONNECTORS", cls.task_connectors),
+            refine_passes=_env_int("REFINE_PASSES", cls.refine_passes),
         )

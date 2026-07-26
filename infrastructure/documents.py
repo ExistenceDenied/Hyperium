@@ -179,6 +179,45 @@ def _slidify(blocks) -> list[tuple[str | None, list[str], list[str]]]:
     return slides or [(None, ["(no content)"], [])]
 
 
+def read_text(path) -> str:
+    """
+    Extract the readable text of a produced deliverable, for review.
+
+    Handles PowerPoint and Word (and spreadsheets) so a critic can judge the
+    actual content, not just the agent's summary of it. Anything else is read as
+    plain text.
+    """
+    p = Path(path)
+    suffix = p.suffix.lower()
+    try:
+        if suffix in (".pptx", ".potx"):
+            from pptx import Presentation
+
+            parts = []
+            for slide in Presentation(str(p)).slides:
+                for shape in slide.shapes:
+                    if shape.has_text_frame and shape.text_frame.text.strip():
+                        parts.append(shape.text_frame.text)
+            return "\n".join(parts)
+        if suffix in (".docx", ".dotx"):
+            from docx import Document
+
+            return "\n".join(par.text for par in Document(str(p)).paragraphs)
+        if suffix in (".xlsx", ".xlsm"):
+            from openpyxl import load_workbook
+
+            rows = []
+            for sheet in load_workbook(str(p), data_only=True).worksheets:
+                for row in sheet.iter_rows(values_only=True):
+                    rows.append(
+                        " | ".join("" if c is None else str(c) for c in row)
+                    )
+            return "\n".join(rows)
+        return p.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return ""
+
+
 def _clear_slides(presentation) -> None:
     """Drop any slides from a template, keeping its theme, master and layouts."""
     slide_ids = presentation.slides._sldIdLst
