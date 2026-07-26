@@ -27,6 +27,18 @@ class Ms365MailProvider(MailProvider):
 
     LIST_TOOL = "list-mail-folder-messages"
     DRAFT_TOOL = "create-draft-email"
+    FOLDERS_TOOL = "list-mail-folders"
+    SELECT = "id,subject,from,receivedDateTime,body,bodyPreview"
+
+    # Graph's well-known folder names, usable directly as a mailFolderId.
+    WELL_KNOWN = frozenset(
+        {
+            "inbox", "drafts", "sentitems", "deleteditems", "junkemail",
+            "archive", "outbox", "clutter", "conversationhistory",
+            "recoverableitemsdeletions", "scheduled", "searchfolders",
+            "serverfailures", "syncissues",
+        }
+    )
 
     def __init__(self, call_tool, limit: int = 25) -> None:
         # call_tool(name, arguments) -> str, e.g. an McpClient's call_tool.
@@ -36,21 +48,57 @@ class Ms365MailProvider(MailProvider):
     def list_messages(self, folder: str) -> list[EmailMessage]:
         raw = self._call(
             self.LIST_TOOL,
-            {"mailFolder": folder, "top": self._limit},
+            {
+                "mailFolderId": self._folder_id(folder),
+                "top": self._limit,
+                "select": self.SELECT,
+            },
         )
         return [self._to_message(item) for item in self._rows(raw)]
 
     def create_draft_reply(self, message: EmailMessage, body: str) -> None:
-        self._call(
+        # create-draft-email takes a single Graph message object under `body`.
+        # contentType is a lowercase enum ('text' | 'html').
+        result = self._call(
             self.DRAFT_TOOL,
             {
-                "subject": message.reply_subject,
-                "to": [message.sender],
-                "body": body,
+                "body": {
+                    "subject": message.reply_subject,
+                    "body": {"contentType": "text", "content": body},
+                    "toRecipients": [
+                        {"emailAddress": {"address": message.sender}}
+                    ],
+                }
             },
         )
+        self._raise_on_error(result)
 
     # --------------------------------------------------------- internals
+
+    def _raise_on_error(self, raw) -> None:
+        # call_tool returns tool errors as text rather than raising; surface
+        # them so a failed draft is logged and retried, never silently dropped.
+        if isinstance(raw, str) and raw.lstrip().startswith("Error from tool"):
+            raise RuntimeError(raw.strip()[:300])
+
+    def _folder_id(self, folder: str) -> str:
+        """
+        Resolve a folder name to a Graph mailFolderId.
+
+        A well-known name (inbox, drafts, …) is its own id. A custom folder like
+        "Hyperium" is not — Graph needs its id, so look it up by display name.
+        """
+        key = folder.strip().lower().replace(" ", "")
+        if key in self.WELL_KNOWN:
+            return key
+        try:
+            for row in self._rows(self._call(self.FOLDERS_TOOL, {"top": 100})):
+                name = str(row.get("displayName", "")).strip().lower()
+                if name == folder.strip().lower():
+                    return str(row.get("id"))
+        except Exception:
+            logger.exception("Could not resolve the '%s' folder.", folder)
+        return folder  # let Graph report an unknown folder rather than guess
 
     def _rows(self, raw: str) -> list[dict]:
         try:
