@@ -111,6 +111,8 @@ def build_context(settings: Settings):
     repository = ProjectRepository(settings.state_directory)
     store = FileArtifactStore(settings.workspace)
 
+    from infrastructure.templates import TemplateLibrary
+
     service = ProjectBuilder.build(
         provider,
         store,
@@ -118,6 +120,7 @@ def build_context(settings: Settings):
         methodologies=methodologies,
         default_methodology=settings.default_methodology,
         activity_executor=build_activity_executor(settings),
+        templates=TemplateLibrary(),
     )
 
     return service, repository

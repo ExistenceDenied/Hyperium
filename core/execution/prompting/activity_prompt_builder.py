@@ -21,12 +21,14 @@ class ActivityPromptBuilder:
     requirements rather than re-inventing them.
     """
 
-    def __init__(self, techniques=None) -> None:
+    def __init__(self, techniques=None, templates=None) -> None:
         """
-        `techniques` is any object exposing `technique(key)`. The builder works
-        without one; the technique guidance is simply omitted.
+        `techniques` is any object exposing `technique(key)`, and `templates`
+        any object exposing `get(deliverable_key)`. The builder works without
+        either; the corresponding guidance is simply omitted.
         """
         self._techniques = techniques
+        self._templates = templates
 
     def build(
         self,
@@ -53,6 +55,7 @@ class ActivityPromptBuilder:
                 f"{deliverable.name}",
                 deliverable.description or "",
                 self._structure_section(deliverable),
+                self._template_section(deliverable),
                 "",
                 "# Your activity",
                 f"{activity.name}",
@@ -85,6 +88,37 @@ class ActivityPromptBuilder:
         )
 
         return "\n".join(lines)
+
+    def _template_section(self, deliverable: Deliverable) -> str:
+        """
+        The polished skeleton the deliverable must fill in, when one exists.
+
+        It gives every deliverable of this kind the same structure. An activity
+        contributes the sections that fall to it and leaves the rest, so the
+        template guides a multi-activity deliverable without each activity
+        rewriting the whole thing.
+        """
+        if self._templates is None:
+            return ""
+
+        template = self._templates.get(deliverable.key)
+
+        if not template:
+            return ""
+
+        return "\n".join(
+            [
+                "",
+                "# Template — the deliverable must follow this exactly",
+                "Use these headings and this structure. Contribute the "
+                "section(s) that fall to your activity, matching the headings, "
+                "tone and depth shown; another activity may write the rest. "
+                "Fill every section with real, specific content — never leave a "
+                "placeholder or the guidance text.",
+                "",
+                template,
+            ]
+        )
 
     def _technique_section(self, activity: Activity) -> str:
         if not activity.technique or self._techniques is None:

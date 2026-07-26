@@ -38,6 +38,7 @@ class ProjectBuilder:
         methodologies=None,
         default_methodology: str | None = None,
         activity_executor: ActivityExecutor | None = None,
+        templates=None,
     ) -> ProjectService:
         catalogue = methodologies.all() if methodologies else []
 
@@ -60,7 +61,9 @@ class ProjectBuilder:
             execution_engine=ExecutionEngine(
                 executor,
                 artifact_store,
-                prompt_builder=ActivityPromptBuilder(techniques=methodologies),
+                prompt_builder=ActivityPromptBuilder(
+                    techniques=methodologies, templates=templates
+                ),
             ),
             repository=repository,
         )
