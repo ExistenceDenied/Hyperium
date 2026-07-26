@@ -32,6 +32,7 @@ from interfaces.web import (
     methodology_pages,
     notification_pages,
     pages,
+    search_pages,
     task_pages,
     techniques_pages,
 )
@@ -144,6 +145,7 @@ class ReviewApp:
 
         self._get_routes = [
             (re.compile(r"^/$"), self._dashboard),
+            (re.compile(r"^/search$"), self._search),
             (re.compile(r"^/engagements$"), self._engagements),
             (re.compile(r"^/notifications$"), self._notifications_index),
             (re.compile(r"^/notifications/unread\.json$"), self._notifications_unread),
@@ -375,6 +377,95 @@ class ReviewApp:
             "alerts": alerts,
         }
         return 200, dashboard_pages.dashboard(summary)
+
+    # ------------------------------------------------------------- search
+
+    def _search(self, query):
+        term = (query.get("q", [""])[0] or "").strip()
+        if not term:
+            return 200, search_pages.search_page("", [])
+
+        needle = term.lower()
+
+        def snip(text):
+            return search_pages.snippet(text or "", term)
+
+        groups: list[tuple[str, list[dict]]] = []
+
+        # Tasks — prompt, result and notes.
+        task_hits = []
+        for view in self._tasks.index() if self._tasks else []:
+            notes = " ".join(note.text for note in view.notes)
+            hay = f"{view.prompt}\n{view.output or ''}\n{notes}".lower()
+            if needle in hay:
+                task_hits.append(
+                    {
+                        "title": view.prompt[:100],
+                        "snippet": snip(view.output or view.prompt),
+                        "link": f"/tasks/{view.id}",
+                        "pill": view.status,
+                        "pill_kind": task_pages._STATUS_PILL.get(view.status, "draft"),
+                    }
+                )
+        groups.append(("Tasks", task_hits))
+
+        # Engagements — the mission behind each project.
+        engagement_hits = []
+        if self._projects is not None:
+            for project_id in self._projects.list_ids():
+                try:
+                    project = self._projects.load(project_id)
+                except Exception:
+                    continue
+                title = project.mission.title
+                desc = project.mission.objective.description
+                if needle in f"{title}\n{desc}".lower():
+                    engagement_hits.append(
+                        {
+                            "title": title,
+                            "snippet": snip(desc),
+                            "link": f"/engagement/{project.id}",
+                        }
+                    )
+        groups.append(("Engagements", engagement_hits))
+
+        # Missions in the backlog.
+        mission_hits = []
+        for mission in self._missions.list() if self._missions else []:
+            desc = mission.objective.description
+            if needle in f"{mission.title}\n{desc}".lower():
+                mission_hits.append(
+                    {
+                        "title": mission.title,
+                        "snippet": snip(desc),
+                        "link": f"/missions/{mission.id}",
+                    }
+                )
+        groups.append(("Missions", mission_hits))
+
+        # Business memory.
+        memory_hits = []
+        for entry in self._memory.list() if self._memory else []:
+            if needle in entry.text.lower():
+                memory_hits.append(
+                    {"title": entry.text[:100], "snippet": "", "link": "/memory"}
+                )
+        groups.append(("Memory", memory_hits))
+
+        # Alerts.
+        alert_hits = []
+        for note in self._notifications.list(200) if self._notifications else []:
+            if needle in note.text.lower():
+                alert_hits.append(
+                    {
+                        "title": note.text,
+                        "snippet": "",
+                        "link": note.link or "/notifications",
+                    }
+                )
+        groups.append(("Alerts", alert_hits))
+
+        return 200, search_pages.search_page(term, groups)
 
     # ------------------------------------------------------- notifications
 

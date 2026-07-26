@@ -36,6 +36,13 @@ nav a { text-decoration:none; padding:5px 2px; border-bottom:2px solid transpare
   color:var(--muted); font-weight:500; }
 nav a.on { color:var(--fg); border-bottom-color:var(--accent); }
 nav { display:flex; gap:18px; }
+form.search { margin-left:auto; }
+form.search input { width:170px; padding:5px 10px; font-size:13px;
+  border-radius:999px; }
+@media (max-width:640px) {
+  form.search { margin-left:0; }
+  form.search input { width:100%; }
+}
 h1 { font-size:24px; margin:22px 0 6px; }
 h2 { font-size:19px; margin:26px 0 8px; }
 h3 { font-size:16px; margin:18px 0 6px; }
@@ -164,7 +171,11 @@ def page(title: str, body: str, refresh: bool = False, section: str = "") -> str
         f"{meta}<title>{esc(title)} · Hyperium</title><style>{STYLE}</style>"
         "</head><body><header class='top'><div class='wrap'>"
         "<strong><a href='/' style='text-decoration:none;color:inherit'>"
-        f"Hyperium</a></strong><nav>{nav}</nav></div></header>"
+        f"Hyperium</a></strong><nav>{nav}</nav>"
+        "<form class='search' action='/search' method='get'>"
+        "<input type='search' name='q' placeholder='Search…' "
+        "aria-label='Search'></form>"
+        "</div></header>"
         f"<div class='wrap'>{body}</div>{_ALERTS_SCRIPT}</body></html>"
     )
 
