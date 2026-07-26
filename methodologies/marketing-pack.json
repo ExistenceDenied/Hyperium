@@ -1,0 +1,91 @@
+{
+  "key": "marketing-pack",
+  "name": "Marketing Pack",
+  "description": "A small, ready-to-post marketing campaign for a product, offer or event: a one-page campaign brief, a two-week content calendar, and the post copy itself. The mission carries what is being promoted and to whom.",
+  "version": "1.0",
+  "discipline": "Marketing",
+  "principles": [
+    "Every post ties back to one campaign goal and one audience.",
+    "Speak to the customer's problem, not the product's features.",
+    "One clear call to action per post.",
+    "Keep one consistent voice across the whole campaign."
+  ],
+  "stages": [
+    {
+      "key": "plan",
+      "name": "Plan the campaign",
+      "description": "Decide the goal, audience, message and offer.",
+      "depends_on": [],
+      "quality_gate": {
+        "description": "The brief names a goal, an audience, a single core message and a call to action.",
+        "require_approval": true,
+        "minimum_words": 120,
+        "required_sections": ["Call to action"]
+      },
+      "deliverables": [
+        {
+          "key": "campaign-brief",
+          "name": "Campaign Brief",
+          "description": "The one-page plan the campaign runs from.",
+          "sections": ["Goal", "Audience", "Core message", "Offer", "Call to action", "Channels"],
+          "format": "docx",
+          "activities": [
+            {
+              "key": "define-campaign",
+              "name": "Define the campaign",
+              "description": "Set the goal, the audience, the single core message, the offer, and the call to action. Keep it to one page a busy owner can act on.",
+              "capabilities": ["COPYWRITING", "BUSINESS_ANALYSIS"],
+              "depends_on": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "create",
+      "name": "Create the content",
+      "description": "Turn the brief into a schedule and the posts themselves.",
+      "depends_on": ["plan"],
+      "quality_gate": {
+        "description": "A dated schedule and ready-to-post copy both exist.",
+        "require_approval": true,
+        "minimum_words": 150,
+        "required_sections": []
+      },
+      "deliverables": [
+        {
+          "key": "social-calendar",
+          "name": "Social Content Calendar",
+          "description": "A two-week posting schedule tied to the campaign.",
+          "sections": ["Schedule", "Themes"],
+          "format": "docx",
+          "activities": [
+            {
+              "key": "plan-calendar",
+              "name": "Plan the calendar",
+              "description": "Lay out a two-week posting schedule: for each post give the date, channel, theme and the hook, all serving the campaign goal.",
+              "capabilities": ["COPYWRITING"],
+              "depends_on": ["define-campaign"]
+            }
+          ]
+        },
+        {
+          "key": "social-posts",
+          "name": "Social Post Drafts",
+          "description": "Ready-to-post copy for every scheduled post.",
+          "sections": ["Posts"],
+          "format": "docx",
+          "activities": [
+            {
+              "key": "write-posts",
+              "name": "Write the posts",
+              "description": "Write the full copy for each post in the calendar: the hook, the body, one clear call to action, and a few suggested hashtags. Keep to the campaign's voice.",
+              "capabilities": ["COPYWRITING"],
+              "depends_on": ["plan-calendar"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

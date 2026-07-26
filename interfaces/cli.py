@@ -64,12 +64,16 @@ def build_activity_executor(settings: Settings):
     )
 
 
-def build_llm(settings: Settings, model: str | None = None) -> ResilientProvider:
+def build_llm(
+    settings: Settings, model: str | None = None, json_mode: bool = False
+) -> ResilientProvider:
     return ResilientProvider(
         OllamaProvider(
             model=model or settings.model,
             timeout_seconds=settings.llm_timeout_seconds,
             temperature=settings.temperature,
+            response_format="json" if json_mode else None,
+            think=False if json_mode else None,
         ),
         attempts=settings.llm_attempts,
         backoff_seconds=settings.llm_backoff_seconds,
@@ -82,7 +86,9 @@ def run_autonomously(args, settings: Settings, project):
     from application.review.quality_reviewer import QualityReviewer
 
     service, _ = build_context(settings)
-    reviewer = QualityReviewer(build_llm(settings, settings.review_model or None))
+    reviewer = QualityReviewer(
+        build_llm(settings, settings.review_model or None, json_mode=True)
+    )
 
     outcome = AutonomousRunner(
         service, reviewer, max_revisions=args.max_revisions

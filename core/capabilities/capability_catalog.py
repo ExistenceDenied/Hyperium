@@ -41,6 +41,11 @@ class CapabilityCatalog:
             name="Presentation Design",
             description="Create presentation material.",
         ),
+        "COPYWRITING": Capability(
+            name="Copywriting",
+            description="Write persuasive customer-facing copy: proposals, "
+            "marketing, and sales content.",
+        ),
     }
 
     @classmethod
