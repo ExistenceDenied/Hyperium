@@ -55,17 +55,16 @@ def tasks_index(views) -> str:
 def new_task() -> str:
     body = (
         "<h1>New task</h1>"
-        "<p class='muted'>The agent reads files and the web on its own. If you "
-        "allow writes, it can change files too — and will ask you before each "
-        "one.</p>"
-        "<form method='post' action='/tasks'>"
+        "<p class='muted'>Describe the job, and attach any files the agent "
+        "should use. It can read and write files and reach the web, and will "
+        "ask you before it changes or sends anything.</p>"
+        "<form method='post' action='/tasks' enctype='multipart/form-data'>"
         "<label>Task"
-        "<textarea name='prompt' rows='4' required placeholder='e.g. Summarise "
-        "the latest deliverable and list open risks.'></textarea></label>"
-        "<label style='display:flex;align-items:center;gap:8px;font-weight:400'>"
-        "<input type='checkbox' name='allow_writes' value='1' "
-        "style='width:auto'> Allow the agent to change files (with approval)"
+        "<textarea name='prompt' rows='4' required placeholder='e.g. Turn the "
+        "prices in the attached file into a quote in quote.xlsx.'></textarea>"
         "</label>"
+        "<label>Attach files (optional)"
+        "<input type='file' name='files' multiple></label>"
         "<div class='actions'><button class='primary' type='submit'>"
         "Start</button>"
         "<a class='btn' href='/tasks'>Cancel</a></div>"
@@ -110,21 +109,31 @@ def _steps(view) -> str:
     )
 
 
-def _deliverables(view) -> str:
-    if not view.artifacts:
-        return ""
-
-    import os
-
-    items = []
-    for index, path in enumerate(view.artifacts):
-        name = esc(os.path.basename(path))
-        items.append(
-            f"<li><a href='/tasks/{view.id}/deliverable/{index}'>{name}</a>"
-            f" <span class='small muted'>{esc(path)}</span></li>"
+def _files(view) -> str:
+    if view.files:
+        items = "".join(
+            f"<li><a href='/tasks/{view.id}/file/{esc(name)}'>{esc(name)}</a>"
+            f" <span class='small muted'>{size} bytes</span></li>"
+            for name, size in view.files
         )
+        listing = f"<ul>{items}</ul>"
+    else:
+        listing = "<p class='muted small'>No files yet.</p>"
 
-    return "<h3>Deliverables</h3><ul>" + "".join(items) + "</ul>"
+    upload = (
+        f"<form method='post' action='/tasks/{view.id}/upload' "
+        "enctype='multipart/form-data' style='margin-top:8px'>"
+        "<input type='file' name='files' multiple>"
+        "<div class='actions'><button type='submit'>Upload files</button>"
+        "</div></form>"
+    )
+
+    return (
+        "<h3>Files</h3>"
+        "<p class='muted small'>The agent's inputs and outputs for this task. "
+        "Upload files here and refer to them by name; downloads are the files "
+        "it produced.</p>" + listing + upload
+    )
 
 
 def task_detail(view) -> str:
@@ -148,7 +157,7 @@ def task_detail(view) -> str:
     if view.error:
         parts.append(f"<div class='banner bad'>{esc(view.error)}</div>")
 
-    parts.append(_deliverables(view))
+    parts.append(_files(view))
     parts.append(_steps(view))
 
     if view.output:

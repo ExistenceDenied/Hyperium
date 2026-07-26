@@ -708,22 +708,20 @@ def build_web_task_runner(settings: Settings):
     from infrastructure.mcp.mcp_client import McpClient
     from infrastructure.mcp.mcp_toolset import connect_mcp_tools
     from infrastructure.persistence.task_repository import TaskRepository
-    from infrastructure.tools import read_only_tools, writable_tools
+    from infrastructure.tools import writable_tools
     from interfaces.web.task_runner import WebTaskRunner
 
     connections = ConnectionStore(settings.state_directory / "connections.json")
 
-    def make_runner(approver, allow_writes, stack):
+    def make_runner(approver, stack, root):
         provider = OllamaAgentProvider(
             model=settings.model,
             timeout_seconds=settings.llm_timeout_seconds,
             temperature=settings.temperature,
         )
-        tools = (
-            writable_tools(settings.workspace)
-            if allow_writes
-            else read_only_tools(settings.workspace)
-        )
+        # Always writable, scoped to the task's own folder — every write is held
+        # at the approval gate, so the person deciding is the control.
+        tools = writable_tools(root)
 
         # Best-effort: a connector that cannot start (missing Node, not signed
         # in) is logged and skipped, never fails the task.
@@ -745,7 +743,7 @@ def build_web_task_runner(settings: Settings):
         TaskRepository(settings.state_directory / "tasks"),
         model=settings.model,
         system=AGENT_SYSTEM,
-        root=settings.workspace,
+        workspace=settings.workspace,
     )
 
 

@@ -26,13 +26,12 @@ from core.project.project import UnknownDeliverableError
 from interfaces.web import (
     backlog_pages,
     connections_pages,
-    files_pages,
     methodology_pages,
     pages,
     task_pages,
 )
 from interfaces.web.layout import error_page
-from interfaces.web.multipart import boundary_of, parse_files
+from interfaces.web.multipart import boundary_of, parse
 
 logger = logging.getLogger(__name__)
 
@@ -155,12 +154,11 @@ class ReviewApp:
                 self._task,
             ),
             (re.compile(r"^/connections$"), self._connections_index),
-            (re.compile(r"^/files$"), self._files_index),
             (
                 re.compile(
-                    r"^/tasks/(?P<key>[0-9a-f-]{36})/deliverable/(?P<index>\d+)$"
+                    r"^/tasks/(?P<key>[0-9a-f-]{36})/file/(?P<name>[^/]+)$"
                 ),
-                self._task_deliverable,
+                self._task_file,
             ),
             (
                 re.compile(r"^/engagement/(?P<key>[0-9a-f-]{36})$"),
@@ -219,7 +217,6 @@ class ReviewApp:
                 re.compile(r"^/engagement/(?P<key>[0-9a-f-]{36})/resume$"),
                 self._resume,
             ),
-            (re.compile(r"^/tasks$"), self._start_task),
             (
                 re.compile(r"^/tasks/(?P<key>[0-9a-f-]{36})/approve$"),
                 self._approve_task,
@@ -397,22 +394,18 @@ class ReviewApp:
 
         return 200, task_pages.task_detail(view)
 
-    def _task_deliverable(self, query, key, index):
+    def _task_file(self, query, key, name):
         import mimetypes
         from pathlib import Path
 
-        view = self._require_tasks().view(UUID(key))
+        tasks = self._require_tasks()
+        task_id = UUID(key)
 
-        if view is None:
-            return 404, error_page(f"No task '{key}'.")
-
-        try:
-            path = Path(view.artifacts[int(index)])
-        except (ValueError, IndexError):
-            return 404, error_page("No such deliverable.")
+        # Path(name).name keeps the download inside the task's own folder.
+        path = tasks.folder(task_id) / Path(name).name
 
         if not path.is_file():
-            return 404, error_page(f"The deliverable is no longer at {path}.")
+            return 404, error_page(f"No file '{name}' for this task.")
 
         media = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
 
@@ -420,17 +413,23 @@ class ReviewApp:
             content=path.read_bytes(), filename=path.name, media_type=media
         )
 
-    def _start_task(self, form):
-        prompt = form.get("prompt", [""])[0].strip()
+    def upload(self, path: str, fields, files) -> tuple[int, str]:
+        """Handle a multipart POST: a new task with files, or files for one."""
+        tasks = self._require_tasks()
 
-        if not prompt:
-            return 400, error_page("A task needs a prompt.", code=400)
+        if path == "/tasks":
+            prompt = (fields.get("prompt") or "").strip()
+            if not prompt:
+                return 400, error_page("A task needs a prompt.", code=400)
+            task_id = tasks.start(prompt, uploads=files)
+            return 303, f"/tasks/{task_id}"
 
-        task_id = self._require_tasks().start(
-            prompt, allow_writes="allow_writes" in form
-        )
+        match = re.match(r"^/tasks/([0-9a-f-]{36})/upload$", path)
+        if match:
+            tasks.save_uploads(UUID(match.group(1)), files)
+            return 303, f"/tasks/{match.group(1)}"
 
-        return 303, f"/tasks/{task_id}"
+        return 404, error_page(f"Unknown path '{path}'.")
 
     def _approve_task(self, form, key):
         decision = form.get("decision", [""])[0]
@@ -448,13 +447,15 @@ class ReviewApp:
 
     def _rerun_task(self, form, key):
         tasks = self._require_tasks()
-        view = tasks.view(UUID(key))
+        task_id = UUID(key)
+        view = tasks.view(task_id)
 
         if view is None:
             return 404, error_page(f"No task '{key}'.")
 
-        # Re-runs start read-only; granting writes again is a deliberate act.
-        task_id = tasks.start(view.prompt, allow_writes=False)
+        # Re-run in place: same folder, so any files uploaded to the task are
+        # used and its outputs update rather than starting a fresh task.
+        tasks.start(view.prompt, task_id=task_id)
 
         return 303, f"/tasks/{task_id}"
 
@@ -484,48 +485,6 @@ class ReviewApp:
         self._require_connections().disable(key)
 
         return 303, "/connections"
-
-    # ------------------------------------------------------------- files
-
-    def _uploads_dir(self):
-        from pathlib import Path
-
-        if self._workspace is None:
-            raise RuntimeError("This interface has no workspace for uploads.")
-
-        return Path(self._workspace) / "uploads"
-
-    def _files_index(self, query):
-        directory = self._uploads_dir()
-
-        files = []
-        if directory.is_dir():
-            files = sorted(
-                (path.name, path.stat().st_size)
-                for path in directory.iterdir()
-                if path.is_file()
-            )
-
-        return 200, files_pages.files_index(files)
-
-    def upload(self, path: str, files) -> tuple[int, str]:
-        """Handle a multipart upload posted to `path`."""
-        if path != "/files":
-            return 404, error_page(f"Unknown path '{path}'.")
-
-        from pathlib import Path
-
-        directory = self._uploads_dir()
-        directory.mkdir(parents=True, exist_ok=True)
-
-        for name, content in files:
-            # Path(name).name drops any directory the browser sent, so an
-            # upload can only ever land in the uploads folder.
-            safe = Path(name).name
-            if safe:
-                (directory / safe).write_bytes(content)
-
-        return 303, "/files"
 
     # ------------------------------------------------------------ backlog
 
@@ -777,11 +736,11 @@ def build_handler(app: ReviewApp):
             parsed = urlparse(self.path)
 
             if content_type.startswith("multipart/form-data"):
-                # Read raw bytes — the upload may be binary — and pull the files.
+                # Read raw bytes — an upload may be binary — and pull the parts.
                 raw_bytes = self.rfile.read(length) if length else b""
                 boundary = boundary_of(content_type)
-                files = parse_files(raw_bytes, boundary) if boundary else []
-                status, body = app.upload(parsed.path, files)
+                fields, files = parse(raw_bytes, boundary) if boundary else ({}, [])
+                status, body = app.upload(parsed.path, fields, files)
                 self._respond(status, body)
                 return
 

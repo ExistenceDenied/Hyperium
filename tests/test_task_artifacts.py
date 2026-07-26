@@ -4,8 +4,6 @@ from application.agent.task_service import deliverables_from
 from core.agents.agent_result import AgentResult, AgentStep
 from core.agents.task_record import TaskRecord
 from infrastructure.persistence.task_repository import TaskRepository
-from interfaces.web.server import Download, ReviewApp
-from interfaces.web.task_runner import WebTaskRunner
 
 
 def test_deliverables_are_the_files_a_run_produced(tmp_path):
@@ -61,26 +59,3 @@ def test_the_record_persists_its_artifacts(tmp_path):
     repo.save(record)
 
     assert repo.get(record.id).artifacts == [str(tmp_path / "quote.xlsx")]
-
-
-def test_the_web_serves_a_task_deliverable_for_download(tmp_path):
-    produced = tmp_path / "quote.xlsx"
-    produced.write_bytes(b"PK\x03\x04 not a real xlsx but bytes")
-
-    repo = TaskRepository(tmp_path / "tasks")
-    record = TaskRecord(
-        prompt="quote",
-        result=AgentResult(output="done"),
-        artifacts=[str(produced)],
-    )
-    repo.save(record)
-
-    runner = WebTaskRunner(lambda a, w, s: None, repo, "model", "system")
-    app = ReviewApp(service=None, projects=None, tasks=runner)
-
-    code, body = app.get(f"/tasks/{record.id}/deliverable/0", {})
-
-    assert code == 200
-    assert isinstance(body, Download)
-    assert body.filename == "quote.xlsx"
-    assert body.content == produced.read_bytes()
