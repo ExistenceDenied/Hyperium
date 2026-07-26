@@ -9,6 +9,7 @@ from infrastructure.tools.excel_tools import (
     WriteExcelTool,
 )
 from infrastructure.tools.list_directory_tool import ListDirectoryTool
+from infrastructure.tools.office_tools import WritePowerPointTool, WriteWordTool
 from infrastructure.tools.read_file_tool import ReadFileTool
 from infrastructure.tools.web_fetch_tool import WebFetchTool
 from infrastructure.tools.write_file_tool import WriteFileTool
@@ -21,6 +22,8 @@ __all__ = [
     "WebFetchTool",
     "WriteExcelTool",
     "WriteFileTool",
+    "WritePowerPointTool",
+    "WriteWordTool",
     "read_only_tools",
     "writable_tools",
 ]
@@ -49,11 +52,15 @@ def writable_tools(root: Path, *, timeout_seconds: float = 30.0) -> list[Tool]:
     routes each invocation through its approver. Handing these to a runner
     without an approver is safe: the default policy denies every side effect.
     Excel produce/update is here too, so an agent can build and revise a
-    spreadsheet — an invoice, a quote, a tracker — under approval.
+    spreadsheet — an invoice, a quote, a tracker — under approval, and Word and
+    PowerPoint so it can actually deliver a document or a deck rather than
+    saying it cannot.
     """
     return [
         *read_only_tools(root, timeout_seconds=timeout_seconds),
         WriteFileTool(root),
         WriteExcelTool(root),
         UpdateExcelCellTool(root),
+        WriteWordTool(root),
+        WritePowerPointTool(root),
     ]

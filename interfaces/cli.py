@@ -474,9 +474,12 @@ AGENT_SYSTEM = (
     "directory: read them by name with read_file or read_excel, and use "
     "list_directory to see what is there — never ask the user for a file path. "
     "Some tools change things and will ask the user for approval first; if one "
-    "is declined, find another way or say what you need. When you have enough "
-    "information, act, then report the result clearly. Do not describe what you "
-    "would do; do it."
+    "is declined, find another way or say what you need. When the task asks for "
+    "a deliverable, produce the actual file: a presentation with "
+    "write_powerpoint, a document with write_word, a spreadsheet with "
+    "write_excel — never reply that you cannot make one or offer only to help. "
+    "When you have enough information, act, then report the result clearly, "
+    "naming the file you produced. Do not describe what you would do; do it."
 )
 
 
