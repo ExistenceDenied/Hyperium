@@ -27,6 +27,9 @@ class TaskRecord:
     created_at: datetime = field(default_factory=_now)
     model: str | None = None
     result: AgentResult | None = None
+    #: Absolute paths of the files this task produced, so a person can find and
+    #: open the deliverable without hunting for it.
+    artifacts: list[str] = field(default_factory=list)
 
     @property
     def status(self) -> str:

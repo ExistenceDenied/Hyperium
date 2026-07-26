@@ -532,7 +532,12 @@ def run_agent_task(args, settings: Settings, prompt: str) -> int:
     record = None
     if not args.no_save:
         service = TaskService(TaskRepository(settings.state_directory / "tasks"))
-        record = service.record(prompt=prompt, result=result, model=settings.model)
+        record = service.record(
+            prompt=prompt,
+            result=result,
+            model=settings.model,
+            root=Path(args.root).resolve(),
+        )
 
     if args.verbose and result.steps:
         print("Steps:")
@@ -542,6 +547,11 @@ def run_agent_task(args, settings: Settings, prompt: str) -> int:
         print()
 
     print(result.output)
+
+    if record is not None and record.artifacts:
+        print("\nDeliverables:")
+        for path in record.artifacts:
+            print(f"  {path}")
 
     if record is not None:
         print(f"\nSaved as task {record.id}", file=sys.stderr)
@@ -599,6 +609,11 @@ def command_task_show(args, settings: Settings) -> int:
     print(f"  model:  {record.model}")
     print(f"  status: {record.status}")
     print(f"\nPrompt:\n  {record.prompt}")
+
+    if record.artifacts:
+        print("\nDeliverables:")
+        for path in record.artifacts:
+            print(f"  {path}")
 
     if record.result:
         if record.result.steps:
@@ -730,6 +745,7 @@ def build_web_task_runner(settings: Settings):
         TaskRepository(settings.state_directory / "tasks"),
         model=settings.model,
         system=AGENT_SYSTEM,
+        root=settings.workspace,
     )
 
 

@@ -110,6 +110,23 @@ def _steps(view) -> str:
     )
 
 
+def _deliverables(view) -> str:
+    if not view.artifacts:
+        return ""
+
+    import os
+
+    items = []
+    for index, path in enumerate(view.artifacts):
+        name = esc(os.path.basename(path))
+        items.append(
+            f"<li><a href='/tasks/{view.id}/deliverable/{index}'>{name}</a>"
+            f" <span class='small muted'>{esc(path)}</span></li>"
+        )
+
+    return "<h3>Deliverables</h3><ul>" + "".join(items) + "</ul>"
+
+
 def task_detail(view) -> str:
     parts = [
         "<div class='row'><h1>Task</h1>"
@@ -131,6 +148,7 @@ def task_detail(view) -> str:
     if view.error:
         parts.append(f"<div class='banner bad'>{esc(view.error)}</div>")
 
+    parts.append(_deliverables(view))
     parts.append(_steps(view))
 
     if view.output:

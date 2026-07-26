@@ -25,6 +25,7 @@ class TaskSerializer:
             "prompt": record.prompt,
             "created_at": record.created_at.isoformat(),
             "model": record.model,
+            "artifacts": list(record.artifacts),
             "result": self._result_to_dict(record.result),
         }
 
@@ -34,6 +35,7 @@ class TaskSerializer:
             id=UUID(payload["id"]),
             created_at=datetime.fromisoformat(payload["created_at"]),
             model=payload.get("model"),
+            artifacts=list(payload.get("artifacts", [])),
             result=self._result_from_dict(payload.get("result")),
         )
 

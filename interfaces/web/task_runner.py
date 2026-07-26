@@ -68,6 +68,7 @@ class _Run:
     allow_writes: bool
     result: AgentResult | None = None
     error: str | None = None
+    artifacts: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -82,6 +83,7 @@ class TaskView:
     steps: list[AgentStep] = field(default_factory=list)
     error: str | None = None
     pending: ActionRequest | None = None
+    artifacts: list[str] = field(default_factory=list)
 
 
 class WebTaskRunner:
@@ -93,11 +95,12 @@ class WebTaskRunner:
     history survives a restart while in-flight runs are held in memory.
     """
 
-    def __init__(self, build_runner, repository, model, system) -> None:
+    def __init__(self, build_runner, repository, model, system, root=None) -> None:
         self._build_runner = build_runner
         self._repository = repository
         self._model = model
         self._system = system
+        self._root = root
         self._runs: dict[UUID, _Run] = {}
         self._lock = threading.Lock()
 
@@ -142,6 +145,7 @@ class WebTaskRunner:
             active=False,
             output=result.output if result else "",
             steps=list(result.steps) if result else [],
+            artifacts=list(record.artifacts),
         )
 
     def index(self) -> list[TaskView]:
@@ -172,6 +176,7 @@ class WebTaskRunner:
                 False,
                 output=run.result.output,
                 steps=list(run.result.steps),
+                artifacts=list(run.artifacts),
             )
 
         pending = run.approver.pending()
@@ -193,13 +198,17 @@ class WebTaskRunner:
                 runner = self._build_runner(run.approver, run.allow_writes, stack)
                 result = runner.run(run.prompt, system=self._system)
 
+            from application.agent.task_service import deliverables_from
+
             run.result = result
+            run.artifacts = deliverables_from(result.steps, self._root)
             self._repository.save(
                 TaskRecord(
                     prompt=run.prompt,
                     id=run.id,
                     model=self._model,
                     result=result,
+                    artifacts=run.artifacts,
                 )
             )
         except Exception as error:

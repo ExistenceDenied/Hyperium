@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 class Download:
     """A response that is a file rather than a page."""
 
-    content: str
+    content: str | bytes
     filename: str
     media_type: str = "text/markdown; charset=utf-8"
 
@@ -151,6 +151,12 @@ class ReviewApp:
                 self._task,
             ),
             (re.compile(r"^/connections$"), self._connections_index),
+            (
+                re.compile(
+                    r"^/tasks/(?P<key>[0-9a-f-]{36})/deliverable/(?P<index>\d+)$"
+                ),
+                self._task_deliverable,
+            ),
             (
                 re.compile(r"^/engagement/(?P<key>[0-9a-f-]{36})$"),
                 self._engagement,
@@ -385,6 +391,29 @@ class ReviewApp:
             return 404, error_page(f"No task '{key}'.")
 
         return 200, task_pages.task_detail(view)
+
+    def _task_deliverable(self, query, key, index):
+        import mimetypes
+        from pathlib import Path
+
+        view = self._require_tasks().view(UUID(key))
+
+        if view is None:
+            return 404, error_page(f"No task '{key}'.")
+
+        try:
+            path = Path(view.artifacts[int(index)])
+        except (ValueError, IndexError):
+            return 404, error_page("No such deliverable.")
+
+        if not path.is_file():
+            return 404, error_page(f"The deliverable is no longer at {path}.")
+
+        media = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
+        return 200, Download(
+            content=path.read_bytes(), filename=path.name, media_type=media
+        )
 
     def _start_task(self, form):
         prompt = form.get("prompt", [""])[0].strip()
@@ -733,7 +762,11 @@ def build_handler(app: ReviewApp):
                 return
 
             if isinstance(body, Download):
-                payload = body.content.encode("utf-8")
+                payload = (
+                    body.content
+                    if isinstance(body.content, bytes)
+                    else body.content.encode("utf-8")
+                )
 
                 self.send_response(status)
                 self.send_header("Content-Type", body.media_type)

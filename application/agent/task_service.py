@@ -1,9 +1,36 @@
 from __future__ import annotations
 
+from pathlib import Path
 from uuid import UUID
 
 from core.agents.agent_result import AgentResult
 from core.agents.task_record import TaskRecord
+
+# The tools that produce a file, each keyed under a "path" argument. Used to
+# work out where a task's deliverable ended up, so a person can open it.
+_FILE_TOOLS = {"write_file", "write_excel", "update_excel_cell"}
+
+
+def deliverables_from(steps, root=None) -> list[str]:
+    """Absolute paths of the files a run produced, in order, de-duplicated."""
+    base = Path(root) if root else Path(".")
+    paths: list[str] = []
+
+    for step in steps or []:
+        if step.tool not in _FILE_TOOLS:
+            continue
+        if step.result.startswith(("Error", "Denied")):
+            continue  # nothing was written
+
+        raw = str(step.arguments.get("path", "")).strip()
+        if not raw:
+            continue
+
+        absolute = str((base / raw).resolve())
+        if absolute not in paths:
+            paths.append(absolute)
+
+    return paths
 
 
 class TaskService:
@@ -23,8 +50,14 @@ class TaskService:
         prompt: str,
         result: AgentResult,
         model: str | None = None,
+        root=None,
     ) -> TaskRecord:
-        record = TaskRecord(prompt=prompt, model=model, result=result)
+        record = TaskRecord(
+            prompt=prompt,
+            model=model,
+            result=result,
+            artifacts=deliverables_from(result.steps, root),
+        )
         self._repository.save(record)
 
         return record
