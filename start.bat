@@ -1,9 +1,11 @@
 @echo off
 rem Double-click to launch Hyperium's web interface.
 cd /d "%~dp0"
-rem The local model to use. qwen3:latest is the 8B model and runs fully on an
-rem 8 GB GPU. Change it to any model you have pulled (see: ollama list).
-set HYPERIUM_MODEL=qwen3:latest
+rem The local model to use. qwen3:30b-a3b is a mixture-of-experts model — 30B
+rem total but only ~3B active per token — so it is both larger and faster than
+rem the dense 14b on an 8 GB GPU. Change it to any model you have pulled (see:
+rem ollama list); qwen3:latest (8B) is the fastest if you want snappier triage.
+set HYPERIUM_MODEL=qwen3:30b-a3b
 
 rem Stop any previous Hyperium server still holding the port, so this instance
 rem can bind. A lingering process on 8765 is what causes "connection refused".
