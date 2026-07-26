@@ -15,26 +15,30 @@ _JSON = re.compile(r"\{.*\}", re.DOTALL)
 
 _METHOD = """\
 You triage a business email as an efficient assistant would. Decide the single \
-best action, and separately whether the business should do any real work as a \
-result. Reply is a last resort, not a default — most mail needs none.
+best action, and separately what work the business must do as a result.
 
 Choose exactly one category:
-- "reply": it genuinely needs a written response you can prepare (a question, a \
-request for information, a routine enquiry). Draft-worthy.
-- "escalate": it needs the owner personally — anything sensitive, financial, \
-legal, a complaint, a VIP, or where you lack the judgement or facts to answer. \
-Do not draft; flag it.
+- "reply": it needs a written response — a question, an enquiry, or a request to \
+produce or send something. Most requests are replies.
+- "escalate": it truly needs the owner personally — a complaint, a legal or \
+financial dispute, a sensitive negotiation, or a decision only they can make. Do \
+NOT escalate a routine request to prepare a document, template, deck or report; \
+that is a "reply" with a task. Escalate only when human judgement is really \
+required.
 - "fyi": informational, no response needed but worth the owner knowing.
 - "skip": newsletters, marketing, receipts, automated notifications — noise.
 
-Separately, list any concrete tasks the business should carry out because of \
-this email — this is how the system stays effective. A task is a self-contained \
-job an agent could do (prepare a quote, update a record, draft a document, \
-research something, follow up later). Replying is NOT a task. If nothing real is \
-warranted, return an empty list — never invent busywork.
+Then list the concrete tasks the business should carry out. Crucially: if the \
+email asks you to produce, prepare, create, draft or send any artifact — a \
+document, template, presentation or deck, report, proposal, spreadsheet, \
+analysis or plan — that is ALWAYS a task, phrased imperatively as producing a \
+file, e.g. "Produce a test strategy template as a Word document and save it." \
+Other real jobs (update a record, research something, follow up) are tasks too. \
+Replying itself is NOT a task. If nothing real is warranted, return an empty \
+list — never invent busywork.
 
 Also give a one-line summary, a priority (low|medium|high) and your confidence \
-(0 to 1). Be honest about low confidence; when unsure, prefer escalate."""
+(0 to 1)."""
 
 
 class EmailTriage:

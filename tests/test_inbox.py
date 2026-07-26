@@ -44,11 +44,13 @@ class _FixedTriage:
 
 
 def _message(mid="m1", sender="client@acme.com", when=None):
+    # A plain question (no artifact requested), so the reply-path tests are not
+    # intercepted by the deliverable safety net.
     return EmailMessage(
         id=mid,
         sender=sender,
-        subject="Quote request",
-        body="Could you send a quote?",
+        subject="Quick question",
+        body="What are your opening hours on Saturday?",
         received_at=when or datetime(2026, 7, 26, 10, 0, tzinfo=timezone.utc),
     )
 
@@ -157,6 +159,58 @@ def test_attach_deliverables_rule_attaches_files(tmp_path):
     ).tick()
 
     assert mail.drafts[0][2] == (("report.xlsx", b"data"),)
+
+
+def test_a_deliverable_request_becomes_a_task_even_if_the_model_forgot(tmp_path):
+    # The model said "reply" with no task; the email clearly asks for a template.
+    mail = _FakeMail(
+        [
+            EmailMessage(
+                id="m1",
+                sender="krisleunis1@gmail.com",
+                subject="McKinsey test strategy template",
+                body="Please provide a test strategy template. Send asap.",
+            )
+        ]
+    )
+    queued: list = []
+
+    _worker(
+        mail,
+        _store(tmp_path),
+        TriageDecision(category="reply", tasks=[]),
+        enqueue=lambda p, **kw: queued.append((p, kw)),
+    ).tick()
+
+    assert mail.drafts == []  # deferred to the delivery, not an empty ack
+    assert len(queued) == 1
+    assert "Produce the deliverable" in queued[0][0]
+    assert queued[0][1]["origin"]["message_id"] == "m1"
+
+
+def test_a_plain_question_still_gets_an_immediate_reply(tmp_path):
+    # No artifact requested → no synthesised task → reply now.
+    mail = _FakeMail(
+        [
+            EmailMessage(
+                id="m2",
+                sender="client@acme.com",
+                subject="Opening hours?",
+                body="What time do you open on Saturday?",
+            )
+        ]
+    )
+    queued: list = []
+
+    _worker(
+        mail,
+        _store(tmp_path),
+        TriageDecision(category="reply", tasks=[]),
+        enqueue=lambda p, **kw: queued.append(p),
+    ).tick()
+
+    assert len(mail.drafts) == 1
+    assert queued == []
 
 
 def test_a_rule_overrides_the_triaged_category(tmp_path):

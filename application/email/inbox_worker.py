@@ -11,6 +11,33 @@ from core.rules.rule import RuleSet
 
 logger = logging.getLogger(__name__)
 
+# Words that signal a request to produce a file, and the verbs that ask for it.
+# When both appear and the model extracted no task, we add one anyway — a local
+# model often replies "I'll prepare it" without turning it into work.
+_ARTIFACTS = (
+    "template", "document", "presentation", "powerpoint", "ppt", "deck",
+    "slide", "report", "proposal", "spreadsheet", "excel", "analysis", "plan",
+    "summary", "letter", "quote", "invoice", "value case", "overview", "brief",
+    "deliverable",
+)
+_REQUESTS = (
+    "send", "provide", "prepare", "create", "make", "produce", "generate",
+    "draft", "need", "want", "put together", "give me", "share", "build",
+)
+
+
+def _is_deliverable_request(message) -> bool:
+    text = f"{message.subject}\n{message.body}".lower()
+    return any(a in text for a in _ARTIFACTS) and any(r in text for r in _REQUESTS)
+
+
+def _fallback_task(message) -> str:
+    return (
+        "Produce the deliverable this email asks for and save it as a file — a "
+        "Word document, a PowerPoint deck or an Excel spreadsheet, whichever "
+        f"fits best.\n\nSubject: {message.subject}\n\nRequest:\n{message.body[:800]}"
+    )
+
 
 class InboxWorker:
     """
@@ -90,6 +117,12 @@ class InboxWorker:
             decision.category = override
 
         reply_expected = decision.should_draft
+
+        # Safety net: a request to produce something must become a task, even if
+        # the model only wrote a reply promising it. Otherwise nothing is made.
+        if reply_expected and not decision.tasks and _is_deliverable_request(message):
+            decision.tasks = [_fallback_task(message)]
+            actions.append("added a deliverable task (the request implied one)")
 
         if reply_expected and not decision.tasks:
             # Nothing is being produced — reply now.
