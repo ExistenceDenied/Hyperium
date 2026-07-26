@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True, slots=True)
@@ -12,11 +14,21 @@ class CapabilityPrompt:
     system prompts of the retired agent model: expertise is now bound to a
     capability, so a human or an external service could satisfy the same
     activity without the prompt changing.
+
+    The text is authored as one Markdown file per capability in the
+    `capabilities/` folder beside this module — data, not code — so the
+    instructions that decide output quality can be edited without touching
+    Python. The file's front-matter carries the persona; its body is the
+    guidance.
     """
 
     persona: str
     guidance: str
 
+
+_DIRECTORY = Path(__file__).parent / "capabilities"
+_FRONT_MATTER = re.compile(r"^---\s*\n(.*?)\n---\s*\n(.*)$", re.DOTALL)
+_PERSONA = re.compile(r"(?mi)^persona:\s*(.+)$")
 
 _DEFAULT = CapabilityPrompt(
     persona="a senior management consultant",
@@ -27,74 +39,32 @@ _DEFAULT = CapabilityPrompt(
 )
 
 
-_LIBRARY: dict[str, CapabilityPrompt] = {
-    "BUSINESS_ANALYSIS": CapabilityPrompt(
-        persona="a senior Business Analyst",
-        guidance=(
-            "Analyse the business need before proposing a solution. "
-            "State the problem, the affected stakeholders, the current "
-            "situation and the desired outcome. Make assumptions explicit."
-        ),
-    ),
-    "REQUIREMENTS_ENGINEERING": CapabilityPrompt(
-        persona="a senior Requirements Engineer",
-        guidance=(
-            "Write requirements that are atomic, testable and unambiguous. "
-            "Give every requirement a stable identifier. Separate functional "
-            "from non-functional requirements. Never write a requirement you "
-            "could not write an acceptance test for."
-        ),
-    ),
-    "RESEARCH": CapabilityPrompt(
-        persona="a research analyst",
-        guidance=(
-            "Synthesise rather than list. Distinguish established fact from "
-            "inference, and state your confidence where it matters. Flag what "
-            "you could not determine instead of filling the gap."
-        ),
-    ),
-    "ARCHITECTURE": CapabilityPrompt(
-        persona="an enterprise architect",
-        guidance=(
-            "Describe the structure, the key decisions and the trade-offs "
-            "behind them. Record rejected alternatives and why they lost. "
-            "Call out the qualities the design optimises for and what it "
-            "sacrifices to get them."
-        ),
-    ),
-    "SOFTWARE_DEVELOPMENT": CapabilityPrompt(
-        persona="a senior software engineer",
-        guidance=(
-            "Produce a technical implementation document. Be concrete about "
-            "components, interfaces and data flow. Note the failure modes and "
-            "how the design handles them."
-        ),
-    ),
-    "TESTING": CapabilityPrompt(
-        persona="a senior test engineer",
-        guidance=(
-            "Derive coverage from the requirements, not from the "
-            "implementation. Give each test a precondition, an action and an "
-            "expected result. Include the negative and boundary cases."
-        ),
-    ),
-    "TECHNICAL_WRITING": CapabilityPrompt(
-        persona="a professional technical writer",
-        guidance=(
-            "Structure the document for a reader who will skim it first. "
-            "Use headings, short paragraphs and tables where they earn their "
-            "place. Write plainly; remove every sentence that carries no "
-            "information."
-        ),
-    ),
-    "PRESENTATION_DESIGN": CapabilityPrompt(
-        persona="a presentation designer",
-        guidance=(
-            "Lead with the message, then support it. One idea per slide. "
-            "Write speaker notes that say what the slide does not."
-        ),
-    ),
-}
+def _parse(text: str) -> CapabilityPrompt:
+    match = _FRONT_MATTER.match(text)
+
+    if not match:
+        return CapabilityPrompt(_DEFAULT.persona, text.strip())
+
+    meta, body = match.group(1), match.group(2)
+    persona = _PERSONA.search(meta)
+
+    return CapabilityPrompt(
+        persona=persona.group(1).strip() if persona else _DEFAULT.persona,
+        guidance=body.strip(),
+    )
+
+
+def _load() -> dict[str, CapabilityPrompt]:
+    library: dict[str, CapabilityPrompt] = {}
+
+    if _DIRECTORY.is_dir():
+        for path in sorted(_DIRECTORY.glob("*.md")):
+            library[path.stem.upper()] = _parse(path.read_text(encoding="utf-8"))
+
+    return library
+
+
+_LIBRARY = _load()
 
 
 def prompt_for(capability_key: str) -> CapabilityPrompt:
