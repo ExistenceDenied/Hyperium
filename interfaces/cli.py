@@ -8,6 +8,7 @@ deliverable, then stops and waits here for a person to approve or reject.
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 from uuid import UUID
@@ -687,12 +688,17 @@ def command_submit(args, settings: Settings) -> int:
 def build_web_task_runner(settings: Settings):
     """The browser's task runner: agent runs with web-mediated approval."""
     from application.agent.agent_runner import AgentRunner
+    from infrastructure.connectors import ConnectionStore
     from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
+    from infrastructure.mcp.mcp_client import McpClient
+    from infrastructure.mcp.mcp_toolset import connect_mcp_tools
     from infrastructure.persistence.task_repository import TaskRepository
     from infrastructure.tools import read_only_tools, writable_tools
     from interfaces.web.task_runner import WebTaskRunner
 
-    def make_runner(approver, allow_writes):
+    connections = ConnectionStore(settings.state_directory / "connections.json")
+
+    def make_runner(approver, allow_writes, stack):
         provider = OllamaAgentProvider(
             model=settings.model,
             timeout_seconds=settings.llm_timeout_seconds,
@@ -703,6 +709,19 @@ def build_web_task_runner(settings: Settings):
             if allow_writes
             else read_only_tools(settings.workspace)
         )
+
+        # Best-effort: a connector that cannot start (missing Node, not signed
+        # in) is logged and skipped, never fails the task.
+        for name, spec in connections.specs().items():
+            try:
+                client = stack.enter_context(
+                    McpClient(spec.command, spec.args, env=spec.env)
+                )
+                tools.extend(connect_mcp_tools(client))
+            except Exception as error:
+                logging.getLogger(__name__).warning(
+                    "Connector '%s' is unavailable: %s", name, error
+                )
 
         return AgentRunner(provider, tools, approver=approver)
 
@@ -715,6 +734,7 @@ def build_web_task_runner(settings: Settings):
 
 
 def command_serve(args, settings: Settings) -> int:
+    from infrastructure.connectors import ConnectionStore
     from interfaces.web.server import ReviewApp, serve
 
     service, repository = build_context(settings)
@@ -726,6 +746,7 @@ def command_serve(args, settings: Settings) -> int:
         methodologies=build_methodologies(settings),
         resources=lambda: [default_resource(settings)],
         tasks=build_web_task_runner(settings),
+        connections=ConnectionStore(settings.state_directory / "connections.json"),
     )
 
     httpd = serve(app, host=args.host, port=args.port)

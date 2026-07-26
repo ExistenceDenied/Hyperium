@@ -23,7 +23,13 @@ from uuid import UUID
 from core.missions.mission import MissionStateError
 from core.missions.mission_priority import MissionPriority
 from core.project.project import UnknownDeliverableError
-from interfaces.web import backlog_pages, methodology_pages, pages, task_pages
+from interfaces.web import (
+    backlog_pages,
+    connections_pages,
+    methodology_pages,
+    pages,
+    task_pages,
+)
 from interfaces.web.layout import error_page
 
 logger = logging.getLogger(__name__)
@@ -109,6 +115,7 @@ class ReviewApp:
         runner=None,
         resources=None,
         tasks=None,
+        connections=None,
     ) -> None:
         self._service = service
         self._projects = projects
@@ -117,6 +124,7 @@ class ReviewApp:
         self._runner = runner or BackgroundWork()
         self._resources = resources or (lambda: [])
         self._tasks = tasks
+        self._connections = connections
 
         self._get_routes = [
             (re.compile(r"^/$"), self._engagements),
@@ -142,6 +150,7 @@ class ReviewApp:
                 re.compile(r"^/tasks/(?P<key>[0-9a-f-]{36})$"),
                 self._task,
             ),
+            (re.compile(r"^/connections$"), self._connections_index),
             (
                 re.compile(r"^/engagement/(?P<key>[0-9a-f-]{36})$"),
                 self._engagement,
@@ -207,6 +216,14 @@ class ReviewApp:
             (
                 re.compile(r"^/tasks/(?P<key>[0-9a-f-]{36})/rerun$"),
                 self._rerun_task,
+            ),
+            (
+                re.compile(r"^/connections/(?P<key>[\w-]+)/connect$"),
+                self._connect,
+            ),
+            (
+                re.compile(r"^/connections/(?P<key>[\w-]+)/disconnect$"),
+                self._disconnect,
             ),
             (
                 re.compile(
@@ -406,6 +423,33 @@ class ReviewApp:
         task_id = tasks.start(view.prompt, allow_writes=False)
 
         return 303, f"/tasks/{task_id}"
+
+    # -------------------------------------------------------- connections
+
+    def _require_connections(self):
+        if self._connections is None:
+            raise RuntimeError("This interface has no connections configured.")
+
+        return self._connections
+
+    def _connections_index(self, query):
+        from infrastructure.connectors import PRESETS
+
+        store = self._require_connections()
+
+        return 200, connections_pages.connections_index(
+            list(PRESETS.values()), store.enabled_keys()
+        )
+
+    def _connect(self, form, key):
+        self._require_connections().enable(key)
+
+        return 303, "/connections"
+
+    def _disconnect(self, form, key):
+        self._require_connections().disable(key)
+
+        return 303, "/connections"
 
     # ------------------------------------------------------------ backlog
 

@@ -92,6 +92,7 @@ label .hint { font-weight:400; color:var(--muted); font-size:13px; }
 _NAV = (
     ("/", "Engagements", "engagements"),
     ("/tasks", "Tasks", "tasks"),
+    ("/connections", "Connect", "connections"),
     ("/missions", "Backlog", "backlog"),
     ("/methodologies", "Methodologies", "methodologies"),
 )

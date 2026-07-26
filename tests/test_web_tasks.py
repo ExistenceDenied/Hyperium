@@ -76,7 +76,7 @@ class ApprovalThenAnswer(AgentProvider):
 def _runner(repo):
     provider = ApprovalThenAnswer()
 
-    def build(approver, allow_writes):
+    def build(approver, allow_writes, stack):
         return AgentRunner(provider, [ActTool()], approver=approver)
 
     return WebTaskRunner(build, repo, model="test", system="do the task")

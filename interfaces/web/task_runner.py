@@ -184,9 +184,15 @@ class WebTaskRunner:
         return TaskView(run.id, run.prompt, "running", True)
 
     def _execute(self, run: _Run) -> None:
+        from contextlib import ExitStack
+
         try:
-            runner = self._build_runner(run.approver, run.allow_writes)
-            result = runner.run(run.prompt, system=self._system)
+            # The stack keeps any connector subprocesses alive for the whole
+            # run and closes them when it finishes.
+            with ExitStack() as stack:
+                runner = self._build_runner(run.approver, run.allow_writes, stack)
+                result = runner.run(run.prompt, system=self._system)
+
             run.result = result
             self._repository.save(
                 TaskRecord(
