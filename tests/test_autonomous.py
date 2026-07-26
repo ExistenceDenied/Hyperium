@@ -4,6 +4,16 @@ from application.project.autonomous_runner import AutonomousRunner
 from application.project.project_builder import ProjectBuilder
 from application.review.quality_reviewer import QualityReviewer, ReviewVerdict
 from core.interfaces.llm_provider import LLMProvider
+from core.methodologies.methodology import (
+    ActivityTemplate,
+    DeliverableTemplate,
+    Methodology,
+    Stage,
+)
+from core.methodologies.quality_gate import QualityGate
+from core.missions.mission import Mission
+from core.missions.objective import Objective
+from core.missions.success_criterion import SuccessCriterion
 from infrastructure.artifacts.file_artifact_store import InMemoryArtifactStore
 from tests.fixtures import (
     FakeMethodologies,
@@ -120,3 +130,74 @@ def test_it_halts_when_a_deliverable_never_passes():
     # Two revisions were requested, then it stopped.
     assert sum(1 for d in outcome.decisions if "revision" in d.decision) == 2
     assert outcome.decisions[-1].decision == "halted"
+
+
+# ------------------------- a deterministic gate the reviewer cannot see
+
+# A gate that demands a section the deliverable does not have on the first pass.
+# The reviewer approves the content, but the gate blocks — the exact deadlock a
+# live business-analysis run hit. The runner must send it back to be fixed.
+_GATED = Methodology(
+    key="test-gated",
+    name="Gated",
+    stages=(
+        Stage(
+            key="only",
+            name="Only",
+            quality_gate=QualityGate(
+                description="Must recommend something.",
+                require_approval=True,
+                required_sections=("Recommendations",),
+            ),
+            deliverables=(
+                DeliverableTemplate(
+                    key="report",
+                    name="Report",
+                    activities=(
+                        ActivityTemplate(
+                            key="write",
+                            name="Write the report",
+                            capabilities=("BUSINESS_ANALYSIS",),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    ),
+)
+
+
+class _SectionAwareLLM(LLMProvider):
+    """Omits the required section until the rework brief asks for it."""
+
+    def generate(self, prompt: str) -> str:
+        if "Engagement Analyst" in prompt:
+            return '{"summary": "ok", "recommended_methodology": "test-gated"}'
+        if "Recommendations" in prompt:  # the rework brief named it
+            return "## Report\n### Recommendations\nDo the thing."
+        return "## Report\nFindings, but not under the heading the gate wants."
+
+
+def test_a_gate_block_is_reworked_until_it_passes():
+    service = ProjectBuilder.build(
+        _SectionAwareLLM(),
+        InMemoryArtifactStore(),
+        methodologies=FakeMethodologies([_GATED]),
+    )
+    mission = Mission(
+        title="Gated mission",
+        objective=Objective(description="Produce a report."),
+        methodology="test-gated",
+    )
+    mission.add_success_criterion(SuccessCriterion(description="A report exists."))
+
+    project = service.start(mission, resources=[build_consultant()])
+
+    outcome = AutonomousRunner(service, StubReviewer(), max_revisions=2).run(project)
+
+    assert outcome.completed is True
+    # The gate — not the reviewer — drove the revision.
+    assert any(
+        "revision" in d.decision and d.deliverable == "report"
+        for d in outcome.decisions
+    )
