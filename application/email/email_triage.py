@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-import json
 import logging
-import re
 
 from core.email.email_message import EmailMessage
 from core.email.triage import CATEGORIES, TriageDecision
 from core.interfaces.llm_provider import LLMProvider
+from core.llm_parsing import extract_json_object
 
 logger = logging.getLogger(__name__)
-
-_THINK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
-_JSON = re.compile(r"\{.*\}", re.DOTALL)
 
 _METHOD = """\
 You triage a business email as an efficient assistant would. Decide the single \
@@ -83,14 +79,8 @@ class EmailTriage:
         return "\n\n".join(parts)
 
     def _parse(self, response: str, message: EmailMessage) -> TriageDecision:
-        text = _THINK.sub("", response or "").strip()
-        match = _JSON.search(text)
-        if match is None:
-            return TriageDecision(category="escalate", summary=message.subject)
-
-        try:
-            data = json.loads(match.group(0))
-        except json.JSONDecodeError:
+        data = extract_json_object(response)
+        if data is None:
             return TriageDecision(category="escalate", summary=message.subject)
 
         category = str(data.get("category", "fyi")).strip().lower()

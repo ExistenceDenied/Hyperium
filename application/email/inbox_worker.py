@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 from collections.abc import Callable
@@ -42,7 +43,13 @@ def _later(current, candidate):
 
 def _is_deliverable_request(message) -> bool:
     text = f"{message.subject}\n{message.body}".lower()
-    return any(a in text for a in _ARTIFACTS) and any(r in text for r in _REQUESTS)
+
+    def has(words):
+        # Whole-word match, so "plan" does not fire on "airplane" nor "share"
+        # on "shareholder".
+        return any(re.search(rf"\b{re.escape(w)}\b", text) for w in words)
+
+    return has(_ARTIFACTS) and has(_REQUESTS)
 
 
 def _fallback_task(message) -> str:

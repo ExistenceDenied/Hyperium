@@ -1295,12 +1295,18 @@ def build_handler(app: ReviewApp):
         server_version = "Hyperium"
 
         def do_GET(self):  # noqa: N802 - required by BaseHTTPRequestHandler
+            if not self._host_ok():
+                self._respond(403, error_page("Refused: bad Host header.", code=403))
+                return
             parsed = urlparse(self.path)
             status, body = app.get(parsed.path, parse_qs(parsed.query))
             self._respond(status, body)
 
         def do_POST(self):  # noqa: N802
-            if not self._same_origin():
+            # Host check first: after a DNS-rebinding attack both Origin and Host
+            # read as the attacker's name, so they match and _same_origin passes
+            # — only a Host allowlist catches it.
+            if not self._host_ok() or not self._same_origin():
                 # The server has no authentication, so a page you visit
                 # elsewhere could otherwise post to it. Reject anything that
                 # did not originate here.
@@ -1329,6 +1335,22 @@ def build_handler(app: ReviewApp):
             raw = self.rfile.read(length).decode("utf-8") if length else ""
             status, body = app.post(parsed.path, parse_qs(raw))
             self._respond(status, body)
+
+        def _host_ok(self) -> bool:
+            """
+            The Host must be a loopback name when the server is bound to
+            loopback — the defence against DNS rebinding, where a remote page
+            resolves its own name to 127.0.0.1 and drives this server. When the
+            operator has deliberately bound to the network, the Host cannot be
+            predicted, so it is not checked (they accepted that exposure).
+            """
+            bound = str(self.server.server_address[0]).lower()
+            if bound not in ("127.0.0.1", "localhost", "::1"):
+                return True
+
+            host = self.headers.get("Host", "")
+            hostname = host.rsplit(":", 1)[0].strip("[]").lower() if host else ""
+            return hostname in ("127.0.0.1", "localhost", "::1")
 
         def _same_origin(self) -> bool:
             """

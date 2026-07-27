@@ -1,18 +1,14 @@
 from __future__ import annotations
 
-import json
 import logging
-import re
 from dataclasses import dataclass
 
 from core.execution.deliverable import Deliverable
 from core.interfaces.llm_provider import LLMProvider
+from core.llm_parsing import extract_json_object
 from core.missions.mission import Mission
 
 logger = logging.getLogger(__name__)
-
-_THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
-_JSON_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -85,19 +81,8 @@ class QualityReviewer:
         )
 
     def _parse(self, response: str) -> ReviewVerdict:
-        text = _THINK_BLOCK.sub("", response or "").strip()
-        match = _JSON_OBJECT.search(text)
-
-        if match is None:
-            return ReviewVerdict(
-                False,
-                "The review was not returned in a usable form; revise for "
-                "clarity and completeness.",
-            )
-
-        try:
-            payload = json.loads(match.group(0))
-        except json.JSONDecodeError:
+        payload = extract_json_object(response)
+        if payload is None:
             return ReviewVerdict(
                 False,
                 "The review was not returned in a usable form; revise for "

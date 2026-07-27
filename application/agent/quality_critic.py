@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import json
 import logging
-import re
 
 from core.interfaces.llm_provider import LLMProvider
+from core.llm_parsing import extract_json_object
 
 logger = logging.getLogger(__name__)
-
-_THINK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
-_JSON = re.compile(r"\{.*\}", re.DOTALL)
 
 _CRITIC = """\
 You are a demanding reviewer assessing a business deliverable before it reaches \
@@ -63,14 +59,7 @@ class QualityCritic:
         )
 
     def _parse(self, response: str) -> str:
-        text = _THINK.sub("", response or "").strip()
-        match = _JSON.search(text)
-        if match is None:
-            return ""
-        try:
-            data = json.loads(match.group(0))
-        except json.JSONDecodeError:
-            return ""
-        if data.get("good_enough") is True:
+        data = extract_json_object(response)
+        if data is None or data.get("good_enough") is True:
             return ""
         return str(data.get("feedback", "")).strip()

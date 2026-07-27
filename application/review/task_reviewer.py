@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import json
 import logging
-import re
 
 from core.interfaces.llm_provider import LLMProvider
+from core.llm_parsing import extract_json_object
 
 logger = logging.getLogger(__name__)
-
-_THINK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
-_JSON = re.compile(r"\{.*\}", re.DOTALL)
 
 
 class TaskReviewer:
@@ -57,14 +53,8 @@ class TaskReviewer:
         )
 
     def _parse(self, response: str) -> list[str]:
-        text = _THINK.sub("", response or "").strip()
-        match = _JSON.search(text)
-        if match is None:
-            return []
-
-        try:
-            payload = json.loads(match.group(0))
-        except json.JSONDecodeError:
+        payload = extract_json_object(response)
+        if payload is None:
             return []
 
         tasks = payload.get("tasks", [])

@@ -161,6 +161,23 @@ def test_attach_deliverables_rule_attaches_files(tmp_path):
     assert mail.drafts[0][2] == (("report.xlsx", b"data"),)
 
 
+def test_deliverable_detection_ignores_substring_matches():
+    from application.email.inbox_worker import _is_deliverable_request
+
+    # "airplane" contains "plan", "shareholder" contains "share" — must not fire.
+    noise = EmailMessage(
+        id="x", sender="a@b.com", subject="Airplane details",
+        body="I wanted the airplane info for the shareholder meeting.",
+    )
+    assert _is_deliverable_request(noise) is False
+
+    real = EmailMessage(
+        id="y", sender="a@b.com", subject="Please send a report",
+        body="Can you provide a report on Q3?",
+    )
+    assert _is_deliverable_request(real) is True
+
+
 def test_a_deliverable_request_becomes_a_task_even_if_the_model_forgot(tmp_path):
     # The model said "reply" with no task; the email clearly asks for a template.
     mail = _FakeMail(
