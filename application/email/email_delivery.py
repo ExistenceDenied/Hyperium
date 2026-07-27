@@ -33,16 +33,17 @@ class EmailDelivery:
         self._can_send = can_send
         self._notify = notify
 
-    def deliver(self, origin: dict, folder) -> bool:
+    def deliver(self, origin: dict, deliverables) -> bool:
         if not origin or origin.get("type") != "email":
             return False
 
-        directory = Path(folder)
-        files = [
-            (path.name, path.read_bytes())
-            for path in sorted(directory.iterdir())
-            if path.is_file()
-        ] if directory.is_dir() else []
+        # Attach only the files the task actually produced — never scratch or
+        # intermediate files that happen to sit in the folder.
+        files = []
+        for path in deliverables or []:
+            candidate = Path(path)
+            if candidate.is_file():
+                files.append((candidate.name, candidate.read_bytes()))
         if not files:
             return False  # nothing produced — nothing to deliver
 

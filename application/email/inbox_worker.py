@@ -26,6 +26,20 @@ _REQUESTS = (
 )
 
 
+# How many times to retry a message that keeps failing before giving up on it,
+# so one poison message cannot block the whole folder forever.
+_MAX_ATTEMPTS = 3
+
+
+def _later(current, candidate):
+    """The later of two timestamps, tolerant of None and a missing candidate."""
+    if candidate is None:
+        return current
+    if current is None:
+        return candidate
+    return candidate if candidate > current else current
+
+
 def _is_deliverable_request(message) -> bool:
     text = f"{message.subject}\n{message.body}".lower()
     return any(a in text for a in _ARTIFACTS) and any(r in text for r in _REQUESTS)
@@ -74,6 +88,7 @@ class InboxWorker:
         self._deliverables = deliverables
         self._context = context
         self._notify = notify
+        self._failures: dict[str, int] = {}
 
     def tick(self) -> int:
         if not self._store.enabled:
@@ -81,25 +96,42 @@ class InboxWorker:
 
         folder = self._store.folder
         try:
+            # Oldest first, so the watermark can only advance across a contiguous
+            # run of handled mail — nothing older is ever jumped over.
             messages = self._provider.list_messages(folder, since=self._store.last_seen)
         except Exception:
             logger.exception("Could not read the '%s' folder.", folder)
             return 0
 
         handled = 0
-        newest = self._store.last_seen
+        # `progress` advances only through messages we are sure are done. It stops
+        # at the first still-failing message, so that message is refetched next
+        # tick rather than silently skipped by the strict `gt` watermark filter.
+        progress = self._store.last_seen
         for message in messages:
             if self._store.is_handled(message.id):
+                progress = _later(progress, message.received_at)
                 continue
             try:
                 self._handle(message)
             except Exception:
                 logger.exception("Failed to handle %s.", message.id)
+                self._failures[message.id] = self._failures.get(message.id, 0) + 1
+                if self._failures[message.id] < _MAX_ATTEMPTS:
+                    break  # retry from here next tick; do not advance past it
+                # Give up on a poison message so it cannot wedge the folder.
+                self._store.mark_handled(
+                    message.id, message.sender, message.subject,
+                    category="failed",
+                    actions=["gave up after repeated errors"],
+                )
+                progress = _later(progress, message.received_at)
                 continue
-            if message.received_at and (newest is None or message.received_at > newest):
-                newest = message.received_at
+            self._failures.pop(message.id, None)
+            progress = _later(progress, message.received_at)
             handled += 1
 
+        newest = progress
         if newest is not None and newest != self._store.last_seen:
             self._store.set_last_seen(newest)
         return handled

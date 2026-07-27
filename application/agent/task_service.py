@@ -32,7 +32,17 @@ def deliverables_from(steps, root=None) -> list[str]:
         if not raw:
             continue
 
-        absolute = str((base / raw).resolve())
+        target = base / raw
+        if not target.is_file():
+            # The Word/PowerPoint tools append an extension when the model omits
+            # it, so the produced file's name differs from the argument.
+            for suffix in (".pptx", ".docx", ".xlsx"):
+                candidate = base / (raw + suffix)
+                if candidate.is_file():
+                    target = candidate
+                    break
+
+        absolute = str(target.resolve())
         if absolute not in paths:
             paths.append(absolute)
 

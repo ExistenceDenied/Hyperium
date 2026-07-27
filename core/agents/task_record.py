@@ -69,6 +69,9 @@ class TaskRecord:
     #: email that spawned it: {"type": "email", "message_id", "sender",
     #: "subject"}. On completion the deliverable is replied back to that source.
     origin: dict[str, str] | None = None
+    #: Whether the deliverable has already been fed back to its origin, so a
+    #: re-run or a follow-up does not email the sender the result again.
+    delivered: bool = False
     #: Earlier turns of this task's thread. The current turn is `prompt` and
     #: `result`; each reply pushes the previous turn here.
     history: list[Exchange] = field(default_factory=list)

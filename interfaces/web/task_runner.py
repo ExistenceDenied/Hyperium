@@ -572,6 +572,10 @@ class WebTaskRunner:
             existing = prior.notes if prior else []
             history = run.history or (prior.history if prior else [])
             origin = run.origin or (prior.origin if prior else None)
+            # Deliver a task's result to its origin exactly once. A re-run or a
+            # follow-up must not email the sender the deliverable again.
+            already_delivered = prior.delivered if prior else False
+            will_deliver = bool(origin) and not already_delivered
             # Persist before flipping the view to done, so a reader that sees
             # "completed" can always load the saved record.
             self._repository.save(
@@ -588,6 +592,7 @@ class WebTaskRunner:
                     notes=existing,
                     history=list(history),
                     origin=origin,
+                    delivered=already_delivered or will_deliver,
                 )
             )
             run.result = result
@@ -596,11 +601,11 @@ class WebTaskRunner:
                 f"Task finished: {run.prompt[:70]}",
                 f"/tasks/{run.id}",
             )
-            # Feed the deliverable back to where the task came from (e.g. reply
-            # to the originating email, attaching what was produced).
-            if origin:
+            # Feed the deliverable back to its origin — only the files this task
+            # actually produced, not everything in the folder.
+            if will_deliver:
                 try:
-                    self._deliver(origin, self.folder(run.id))
+                    self._deliver(origin, run.artifacts)
                 except Exception:
                     logger.exception("Delivering task %s to its origin failed.", run.id)
         except Exception as error:

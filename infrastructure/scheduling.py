@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import threading
 from datetime import datetime
 from pathlib import Path
 from uuid import UUID
 
 from core.scheduling.schedule import Schedule
+from infrastructure.json_store import write_json_atomic
 
 
 class ScheduleStore:
@@ -19,6 +21,9 @@ class ScheduleStore:
 
     def __init__(self, path: Path) -> None:
         self._path = Path(path)
+        # mark_run fires from the scheduler thread while the web UI adds/edits;
+        # serialize so a due-time update and an edit cannot lose one another.
+        self._lock = threading.Lock()
 
     def list(self) -> list[Schedule]:
         return [self._from_dict(item) for item in self._read()]
@@ -44,29 +49,33 @@ class ScheduleStore:
             technique=technique,
             methodology=methodology,
         )
-        data = self._read()
-        data.append(self._to_dict(schedule))
-        self._write(data)
+        with self._lock:
+            data = self._read()
+            data.append(self._to_dict(schedule))
+            self._write(data)
         return schedule
 
     def set_enabled(self, schedule_id: UUID, enabled: bool) -> None:
-        data = self._read()
-        for item in data:
-            if item["id"] == str(schedule_id):
-                item["enabled"] = bool(enabled)
-        self._write(data)
+        with self._lock:
+            data = self._read()
+            for item in data:
+                if item["id"] == str(schedule_id):
+                    item["enabled"] = bool(enabled)
+            self._write(data)
 
     def mark_run(self, schedule_id: UUID, at: datetime) -> None:
-        data = self._read()
-        for item in data:
-            if item["id"] == str(schedule_id):
-                item["last_run"] = at.isoformat()
-        self._write(data)
+        with self._lock:
+            data = self._read()
+            for item in data:
+                if item["id"] == str(schedule_id):
+                    item["last_run"] = at.isoformat()
+            self._write(data)
 
     def delete(self, schedule_id: UUID) -> None:
-        self._write(
-            [item for item in self._read() if item["id"] != str(schedule_id)]
-        )
+        with self._lock:
+            self._write(
+                [item for item in self._read() if item["id"] != str(schedule_id)]
+            )
 
     # --------------------------------------------------------- internals
 
@@ -76,11 +85,7 @@ class ScheduleStore:
         return json.loads(self._path.read_text(encoding="utf-8")).get("schedules", [])
 
     def _write(self, schedules: list[dict]) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps({"schedules": schedules}, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        write_json_atomic(self._path, {"schedules": schedules})
 
     def _to_dict(self, schedule: Schedule) -> dict:
         return {

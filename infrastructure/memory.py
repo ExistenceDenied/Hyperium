@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import UUID
 
 from core.memory.memory_entry import MemoryEntry
+from infrastructure.json_store import write_json_atomic
 
 
 class MemoryStore:
@@ -79,11 +80,7 @@ class MemoryStore:
         return json.loads(self._path.read_text(encoding="utf-8")).get("entries", [])
 
     def _write(self, entries: list[dict]) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps({"entries": entries}, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        write_json_atomic(self._path, {"entries": entries})
 
     def _to_dict(self, entry: MemoryEntry) -> dict:
         return {

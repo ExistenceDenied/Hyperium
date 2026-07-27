@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import UUID
 
 from core.rules.rule import Condition, Rule, RuleSet
+from infrastructure.json_store import write_json_atomic
 
 
 class RuleStore:
@@ -79,10 +80,7 @@ class RuleStore:
         return json.loads(self._path.read_text(encoding="utf-8"))
 
     def _write(self, data: dict) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        write_json_atomic(self._path, data)
 
     def _to_dict(self, rule: Rule) -> dict:
         return {

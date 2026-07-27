@@ -301,6 +301,77 @@ def test_worker_does_nothing_while_disabled(tmp_path):
     assert mail.drafts == [] and mail.sent == []
 
 
+# ------------------------------------------- watermark (no dropped mail)
+
+
+class _WindowMail(_FakeMail):
+    """A mailbox that honours `since` and a fetch limit, oldest first."""
+
+    def __init__(self, messages, limit=10):
+        super().__init__(messages)
+        self._all = sorted(messages, key=lambda m: m.received_at)
+        self._limit = limit
+
+    def list_messages(self, folder, since=None):
+        self.since_calls.append(since)
+        newer = [m for m in self._all if since is None or m.received_at > since]
+        return newer[: self._limit]
+
+
+class _FlakyTriage:
+    """Triage that raises for a message the first time it is seen."""
+
+    def __init__(self, fail_once_for):
+        self._fail = set(fail_once_for)
+        self._seen: dict = {}
+
+    def classify(self, message, context=""):
+        self._seen[message.id] = self._seen.get(message.id, 0) + 1
+        if message.id in self._fail and self._seen[message.id] == 1:
+            raise RuntimeError("transient triage failure")
+        return TriageDecision(category="skip")
+
+
+def _at(hour):
+    return datetime(2026, 7, 26, hour, tzinfo=timezone.utc)
+
+
+def _skip_worker(mail, store, triage=None):
+    return InboxWorker(
+        mail, triage or _FixedTriage(TriageDecision(category="skip")),
+        EmailResponder(_CannedLLM()), store,
+    )
+
+
+def test_a_burst_larger_than_the_fetch_limit_is_not_dropped(tmp_path):
+    msgs = [_message(mid=f"m{i}", when=_at(10 + i)) for i in range(3)]  # m0<m1<m2
+    mail = _WindowMail(msgs, limit=2)  # can only see 2 per tick
+    store = _store(tmp_path)
+    worker = _skip_worker(mail, store)
+
+    worker.tick()  # sees oldest 2 (m0, m1)
+    assert store.is_handled("m0") and store.is_handled("m1")
+    assert not store.is_handled("m2")  # not yet fetched
+
+    worker.tick()  # watermark advanced → now sees m2
+    assert store.is_handled("m2")
+
+
+def test_a_transient_failure_does_not_skip_the_message(tmp_path):
+    m0, m1, m2 = (_message(f"m{i}", when=_at(10 + i)) for i in range(3))
+    mail = _WindowMail([m0, m1, m2])
+    store = _store(tmp_path)
+    worker = _skip_worker(mail, store, triage=_FlakyTriage(fail_once_for=["m1"]))
+
+    worker.tick()  # m0 ok; m1 fails → stop; m2 not reached
+    assert store.is_handled("m0")
+    assert not store.is_handled("m1") and not store.is_handled("m2")
+    assert store.last_seen == _at(10)  # watermark did NOT jump past the failure
+
+    worker.tick()  # m1 retried (now succeeds), then m2
+    assert store.is_handled("m1") and store.is_handled("m2")
+
+
 def test_check_interval_is_configurable_and_clamped(tmp_path):
     store = InboxStore(tmp_path / "inbox.json")
 

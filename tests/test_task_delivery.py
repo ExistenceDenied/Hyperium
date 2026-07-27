@@ -66,6 +66,23 @@ def test_a_task_from_an_email_is_delivered_to_its_origin_on_completion(tmp_path)
     assert delivered[0]["message_id"] == "m9"
 
 
+def test_a_task_delivers_to_its_origin_only_once(tmp_path):
+    delivered = []
+    runner = _runner(tmp_path, deliver=lambda origin, files: delivered.append(origin))
+
+    origin = {"type": "email", "message_id": "m1", "sender": "c@acme.com"}
+    task_id = runner.queue("prepare a deck", origin=origin)
+    runner.pump()
+    assert _wait(lambda: len(delivered) == 1)
+
+    # A re-run of the same task (as "Run again" or a follow-up does) must NOT
+    # email the sender the deliverable a second time.
+    runner.start("prepare a deck", task_id=task_id)
+    assert _wait(lambda: runner.view(task_id).status == "completed")
+    time.sleep(0.15)
+    assert len(delivered) == 1
+
+
 def test_a_task_without_an_origin_delivers_nothing(tmp_path):
     delivered = []
     runner = _runner(tmp_path, deliver=lambda origin, folder: delivered.append(origin))

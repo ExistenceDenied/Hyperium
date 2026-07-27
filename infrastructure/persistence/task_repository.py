@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from uuid import UUID
 
 from core.agents.task_record import TaskRecord
+from infrastructure.json_store import write_json_atomic
 from infrastructure.persistence.task_serializer import (
     SCHEMA_VERSION,
     TaskSerializer,
@@ -27,21 +29,18 @@ class TaskRepository:
     def __init__(self, root: Path, serializer: TaskSerializer | None = None) -> None:
         self._root = Path(root)
         self._serializer = serializer or TaskSerializer()
+        # The same record is written from a task's execution thread and from web
+        # requests (adding a note); serialize the writes and make each atomic.
+        self._lock = threading.Lock()
 
     def save(self, record: TaskRecord) -> Path:
-        self._root.mkdir(parents=True, exist_ok=True)
-
         path = self._path(record.id)
         payload = {
             "schema_version": SCHEMA_VERSION,
             **self._serializer.to_dict(record),
         }
-
-        path.write_text(
-            json.dumps(payload, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
-
+        with self._lock:
+            write_json_atomic(path, payload)
         return path
 
     def get(self, task_id: UUID) -> TaskRecord:

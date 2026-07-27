@@ -915,7 +915,7 @@ def command_serve(args, settings: Settings) -> int:
     notifications = NotificationStore(settings.state_directory / "notifications.json")
     rules = RuleStore(settings.state_directory / "rules.json")
 
-    def deliver_to_origin(origin, folder):
+    def deliver_to_origin(origin, deliverables):
         """Reply to the email that spawned a task, attaching what it produced."""
         if not origin or origin.get("type") != "email":
             return
@@ -935,7 +935,7 @@ def command_serve(args, settings: Settings) -> int:
                     rules=rules.rule_set,
                     can_send=lambda: rules.sending_enabled,
                     notify=notifications.add,
-                ).deliver(origin, folder)
+                ).deliver(origin, deliverables)
         except Exception:
             logging.getLogger(__name__).warning("Delivering to email origin failed.")
 

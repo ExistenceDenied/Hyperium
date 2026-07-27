@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from core.email.email_message import EmailMessage
@@ -49,14 +49,16 @@ class Ms365MailProvider(MailProvider):
         self._limit = limit
 
     def list_messages(self, folder: str, since=None) -> list[EmailMessage]:
+        # Oldest first: the worker advances a watermark through the backlog in
+        # order, so a burst larger than `top` is caught up over several ticks
+        # rather than jumping the watermark and dropping the older messages.
         args = {
             "mailFolderId": self._folder_id(folder),
             "top": self._limit,
             "select": self.SELECT,
-            "orderby": "receivedDateTime desc",
+            "orderby": "receivedDateTime asc",
         }
         if since is not None:
-            # Only mail newer than the last run — so the worker sees each once.
             stamp = since.isoformat().replace("+00:00", "Z")
             args["filter"] = f"receivedDateTime gt {stamp}"
         rows = self._rows(self._call(self.LIST_TOOL, args))
@@ -168,6 +170,10 @@ class Ms365MailProvider(MailProvider):
         if received:
             try:
                 when = datetime.fromisoformat(str(received).replace("Z", "+00:00"))
+                # Always UTC-aware, so watermark comparisons never raise on a
+                # naive-vs-aware mismatch.
+                if when.tzinfo is None:
+                    when = when.replace(tzinfo=timezone.utc)
             except ValueError:
                 when = None
         return EmailMessage(

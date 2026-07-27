@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from infrastructure.json_store import write_json_atomic
 from infrastructure.mcp.config import McpServerSpec
 
 
@@ -227,7 +228,4 @@ class ConnectionStore:
         return json.loads(self._path.read_text(encoding="utf-8"))
 
     def _write(self, data: dict) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        write_json_atomic(self._path, data)
