@@ -129,6 +129,7 @@ class WebTaskRunner:
         system,
         workspace,
         approach=None,
+        default_technique=None,
         context=None,
         reviewer=None,
         max_concurrent=1,
@@ -144,6 +145,9 @@ class WebTaskRunner:
         self._workspace = Path(workspace)
         # approach(technique_key, methodology_key) -> guidance text to prepend.
         self._approach = approach or (lambda technique, methodology: "")
+        # default_technique(prompt) -> a technique key to apply when the task
+        # picked none — e.g. the presentation technique for a deck task.
+        self._default_technique = default_technique or (lambda prompt: "")
         # context() -> the business memory prepended to every task.
         self._context = context or (lambda: "")
         # reviewer(prompt, output) -> [improvement task descriptions].
@@ -442,7 +446,8 @@ class WebTaskRunner:
         if memory:
             preamble.append(memory)
 
-        approach = self._approach(run.technique, run.methodology)
+        technique = run.technique or self._default_technique(run.prompt)
+        approach = self._approach(technique, run.methodology)
         if approach:
             preamble.append(approach)
 

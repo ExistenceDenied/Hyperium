@@ -782,6 +782,17 @@ def build_web_task_runner(settings: Settings, notify=None, deliver=None):
 
         return "\n\n".join(parts)
 
+    _DECK_WORDS = ("powerpoint", "presentation", "deck", "slides", ".pptx", "pitch")
+
+    def default_technique(prompt: str) -> str:
+        # Apply the executive-presentation technique to any deck task that did
+        # not pick a technique, so the model builds on a strong structure
+        # instead of improvising a thin one.
+        lowered = (prompt or "").lower()
+        if any(word in lowered for word in _DECK_WORDS):
+            return "presentation"
+        return ""
+
     def make_runner(approver, stack, root):
         provider = OllamaAgentProvider(
             model=settings.model,
@@ -818,6 +829,7 @@ def build_web_task_runner(settings: Settings, notify=None, deliver=None):
         system=AGENT_SYSTEM,
         workspace=settings.workspace,
         approach=approach,
+        default_technique=default_technique,
         context=memory.as_context,
         reviewer=task_reviewer.review,
         notify=notify,
