@@ -18,6 +18,7 @@ from application.project.project_builder import ProjectBuilder
 from config.settings import Settings
 from core.capabilities.capability_catalog import CapabilityCatalog
 from core.capabilities.proficiency_level import ProficiencyLevel
+from core.interfaces.llm_provider import LLMProvider
 from core.missions.mission import MissionStateError
 from core.missions.mission_priority import MissionPriority
 from core.missions.mission_status import MissionStatus
@@ -47,15 +48,10 @@ def build_activity_executor(settings: Settings):
     from application.agent.agent_runner import AgentRunner
     from application.agent.approval_policies import AutoDenyApprover
     from application.execution.agent_activity_executor import AgentActivityExecutor
-    from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
     from infrastructure.memory import MemoryStore
     from infrastructure.tools import read_only_tools
 
-    provider = OllamaAgentProvider(
-        model=settings.model,
-        timeout_seconds=settings.llm_timeout_seconds,
-        temperature=settings.temperature,
-    )
+    provider = build_agent_provider(settings)
 
     context = MemoryStore(settings.state_directory / "memory.json").as_context()
 
@@ -69,19 +65,70 @@ def build_activity_executor(settings: Settings):
     )
 
 
+# Claude has no strict JSON-mode toggle like Ollama's response_format; a system
+# nudge plus the callers' own tolerant JSON extraction does the same job.
+_JSON_SYSTEM = (
+    "Respond with only the JSON object requested — no prose, no markdown, "
+    "no code fences."
+)
+
+
 def build_llm(
     settings: Settings, model: str | None = None, json_mode: bool = False
 ) -> ResilientProvider:
-    return ResilientProvider(
-        OllamaProvider(
+    if settings.llm_provider == "anthropic":
+        from infrastructure.llm.anthropic_provider import AnthropicProvider
+
+        inner: LLMProvider = AnthropicProvider(
+            model=model or settings.anthropic_model,
+            api_key=settings.anthropic_api_key or None,
+            max_tokens=settings.anthropic_max_tokens,
+            timeout_seconds=settings.llm_timeout_seconds,
+            system=_JSON_SYSTEM if json_mode else None,
+            thinking=settings.anthropic_thinking,
+        )
+    else:
+        inner = OllamaProvider(
             model=model or settings.model,
             timeout_seconds=settings.llm_timeout_seconds,
             temperature=settings.temperature,
             response_format="json" if json_mode else None,
             think=False if json_mode else None,
-        ),
+        )
+
+    return ResilientProvider(
+        inner,
         attempts=settings.llm_attempts,
         backoff_seconds=settings.llm_backoff_seconds,
+    )
+
+
+def build_agent_provider(settings: Settings):
+    """
+    The tool-using agent backend for the selected provider.
+
+    Centralised so every agent construction site — engagements, direct tasks,
+    the web task runner — switches between Ollama and Claude from one place.
+    """
+    if settings.llm_provider == "anthropic":
+        from infrastructure.llm.anthropic_agent_provider import (
+            AnthropicAgentProvider,
+        )
+
+        return AnthropicAgentProvider(
+            model=settings.anthropic_model,
+            api_key=settings.anthropic_api_key or None,
+            max_tokens=settings.anthropic_max_tokens,
+            timeout_seconds=settings.llm_timeout_seconds,
+            thinking=settings.anthropic_thinking,
+        )
+
+    from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
+
+    return OllamaAgentProvider(
+        model=settings.model,
+        timeout_seconds=settings.llm_timeout_seconds,
+        temperature=settings.temperature,
     )
 
 
@@ -524,7 +571,6 @@ def run_agent_task(args, settings: Settings, prompt: str) -> int:
     from application.agent.approval_policies import AutoApproveApprover
     from application.agent.task_service import TaskService
     from core.agents.agent_result import StopReason
-    from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
     from infrastructure.persistence.task_repository import TaskRepository
     from interfaces.approval import ConsoleApprover
 
@@ -532,11 +578,7 @@ def run_agent_task(args, settings: Settings, prompt: str) -> int:
 
     with ExitStack() as stack:
         runner = AgentRunner(
-            OllamaAgentProvider(
-                model=settings.model,
-                timeout_seconds=settings.llm_timeout_seconds,
-                temperature=settings.temperature,
-            ),
+            build_agent_provider(settings),
             agent_tools(args, stack),
             max_iterations=args.max_steps,
             approver=approver,
@@ -736,7 +778,6 @@ def build_web_task_runner(settings: Settings, notify=None, deliver=None):
     from application.agent.quality_critic import QualityCritic
     from application.review.task_reviewer import TaskReviewer
     from infrastructure.connectors import ConnectionStore
-    from infrastructure.llm.ollama_agent_provider import OllamaAgentProvider
     from infrastructure.mcp.mcp_client import McpClient
     from infrastructure.mcp.mcp_toolset import connect_mcp_tools
     from infrastructure.memory import MemoryStore
@@ -794,11 +835,7 @@ def build_web_task_runner(settings: Settings, notify=None, deliver=None):
         return ""
 
     def make_runner(approver, stack, root):
-        provider = OllamaAgentProvider(
-            model=settings.model,
-            timeout_seconds=settings.llm_timeout_seconds,
-            temperature=settings.temperature,
-        )
+        provider = build_agent_provider(settings)
         # Writable, scoped to the task's own folder. Deliverables use a branded
         # template if one is dropped in workspace/branding.
         tools = writable_tools(root, branding=settings.workspace / "branding")

@@ -29,6 +29,12 @@ office = [
     "python-pptx>=0.6",
     "openpyxl>=3.1",
 ]
+# The Claude API backend. Optional: Hyperium defaults to local Ollama, and the
+# SDK is imported lazily, so the unit suite and an Ollama-only run never need it.
+# Install with `pip install -e .[anthropic]` to run HYPERIUM_LLM_PROVIDER=anthropic.
+anthropic = [
+    "anthropic>=0.40",
+]
 
 [project.scripts]
 hyperium = "interfaces.cli:main"

@@ -36,10 +36,25 @@ class Settings:
     variables so that behaviour is configured rather than hardcoded.
     """
 
+    # Which backend the LLM/agent ports run on: "ollama" (local, the default) or
+    # "anthropic" (the Claude API). Only the factories in interfaces/cli.py read
+    # this; every caller stays provider-agnostic behind the LLMProvider port.
+    llm_provider: str = "ollama"
     model: str = "qwen3:latest"
     # The reviewer can use a sharper model than the worker: review runs less
-    # often, and it sets the quality bar. Empty means "same as `model`".
+    # often, and it sets the quality bar. Empty means "same as `model`". In
+    # anthropic mode this may hold a Claude id (e.g. "claude-haiku-4-5") to run
+    # cheap reviews on a smaller model.
     review_model: str = ""
+    # Claude API settings, used only when llm_provider == "anthropic". The key is
+    # optional here: left blank, the Anthropic SDK resolves ANTHROPIC_API_KEY (or
+    # an `ant auth login` profile) itself, so the secret need not live in config.
+    anthropic_model: str = "claude-opus-4-8"
+    anthropic_api_key: str = ""
+    anthropic_max_tokens: int = 4096
+    # Extended (adaptive) thinking. Off by default: it adds latency and cost, and
+    # Hyperium's calls are short. Turn on for harder judgement.
+    anthropic_thinking: bool = False
     temperature: float = 0.2
     workspace: Path = Path("workspace")
     state_directory: Path = Path("workspace/.hyperium")
@@ -62,8 +77,17 @@ class Settings:
     @classmethod
     def load(cls) -> "Settings":
         return cls(
+            llm_provider=_env("LLM_PROVIDER", cls.llm_provider).strip().lower(),
             model=_env("MODEL", cls.model),
             review_model=_env("REVIEW_MODEL", cls.review_model),
+            anthropic_model=_env("ANTHROPIC_MODEL", cls.anthropic_model),
+            anthropic_api_key=_env("ANTHROPIC_API_KEY", cls.anthropic_api_key),
+            anthropic_max_tokens=_env_int(
+                "ANTHROPIC_MAX_TOKENS", cls.anthropic_max_tokens
+            ),
+            anthropic_thinking=_env_bool(
+                "ANTHROPIC_THINKING", cls.anthropic_thinking
+            ),
             temperature=_env_float("TEMPERATURE", cls.temperature),
             workspace=Path(_env("WORKSPACE", str(cls.workspace))),
             state_directory=Path(_env("STATE_DIR", str(cls.state_directory))),
