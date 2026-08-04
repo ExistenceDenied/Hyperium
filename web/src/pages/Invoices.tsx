@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import type { BillingBasis, Comment, DocStatus, Invoice, InvoiceLine, VatTreatment } from '@af/core'
+import { useLocation } from 'react-router-dom'
+import type { BillingBasis, Comment, Customer, DocStatus, Invoice, InvoiceLine, VatTreatment } from '@af/core'
 import { addDaysISO, formatEUR, formatInvoiceNumber, formatNumber, invoiceTotals, lineAmount, VAT_TREATMENTS, vatMention, vatTreatmentLabel } from '@af/core'
 import { api } from '../lib/api'
 import { usePeriod } from '../state/period'
-import { useSettings } from '../state/settings'
+import { useSettingsCtx } from '../state/settings'
 import { Card, Empty, Field, IconButton, PageHeader, Spinner, useToast } from '../components/ui'
 import { GenerateButtons } from '../components/GenerateButtons'
+import { CustomerModal } from '../components/CustomerModal'
 import { DocMeta, StatusBadge } from '../components/DocMeta'
 import { Icon } from '../components/icons'
 
@@ -15,13 +16,14 @@ type DraftLine = InvoiceLine & { key: string }
 
 export default function Invoices() {
   const notify = useToast()
-  const settings = useSettings()
+  const { settings, reload: reloadSettings } = useSettingsCtx()
   const period = usePeriod()
   const location = useLocation()
   const [invoices, setInvoices] = useState<Invoice[] | null>(null)
   const [open, setOpen] = useState<Invoice | null>(null)
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Invoice | null>(null)
+  const [custModal, setCustModal] = useState<{ customer: Customer | null } | null>(null)
 
   // create form state
   const [customerId, setCustomerId] = useState('')
@@ -42,6 +44,34 @@ export default function Invoices() {
     if (c) {
       setVatTreatment(c.vatTreatment)
       setPaymentTermsDays(c.paymentTermsDays)
+    }
+  }
+
+  // ---- Inline customer CRUD (persisted via the dedicated /customers endpoints,
+  //      which never disturb the invoice counter) --------------------------------
+  const openNewCustomer = () => setCustModal({ customer: null })
+  const openEditCustomer = () => {
+    const c = settings?.customers.find((x) => x.id === customerId)
+    if (c) setCustModal({ customer: c })
+  }
+  const handleCustomerSaved = (saved: Customer, wasNew: boolean) => {
+    reloadSettings()
+    if (wasNew) chooseCustomer(saved.id) // adopt the brand-new customer for this invoice
+    setCustModal(null)
+    notify('ok', `Customer ${saved.company} ${wasNew ? 'added' : 'updated'}`)
+  }
+  const deleteCurrentCustomer = async () => {
+    const c = settings?.customers.find((x) => x.id === customerId)
+    if (!c) return
+    if (!window.confirm(`Delete customer ${c.company}? Existing invoices keep their details; new invoices can't use it.`)) return
+    try {
+      await api.deleteCustomer(c.id)
+      const remaining = (settings?.customers ?? []).filter((x) => x.id !== c.id)
+      setCustomerId(remaining[0]?.id ?? '')
+      reloadSettings()
+      notify('ok', `Customer ${c.company} deleted`)
+    } catch (e) {
+      notify('err', String(e))
     }
   }
 
@@ -215,21 +245,42 @@ export default function Invoices() {
         {settings.customers.length === 0 ? (
           <Empty>
             <p>You need a customer before you can invoice.</p>
-            <Link to="/settings" className="btn-ghost btn-sm mt-3 inline-flex">
-              <Icon name="settings" className="h-3.5 w-3.5" /> Add a customer in Settings
-            </Link>
+            <button className="btn-ghost btn-sm mt-3 inline-flex" onClick={openNewCustomer}>
+              <Icon name="plus" className="h-3.5 w-3.5" /> Add a customer
+            </button>
           </Empty>
         ) : (
           <>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Field label="Customer">
-                <select className="input" value={customerId} onChange={(e) => chooseCustomer(e.target.value)}>
-                  {settings.customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.company}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-1.5">
+                  <select className="input flex-1" value={customerId} onChange={(e) => chooseCustomer(e.target.value)}>
+                    {settings.customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.company}
+                      </option>
+                    ))}
+                  </select>
+                  <IconButton title="New customer" onClick={openNewCustomer}>
+                    <Icon name="plus" className="h-4 w-4" />
+                  </IconButton>
+                  <IconButton
+                    title="Edit selected customer"
+                    className="disabled:pointer-events-none disabled:opacity-40"
+                    disabled={!customerId}
+                    onClick={openEditCustomer}
+                  >
+                    <Icon name="edit" className="h-4 w-4" />
+                  </IconButton>
+                  <IconButton
+                    title="Delete selected customer"
+                    className="disabled:pointer-events-none disabled:opacity-40"
+                    disabled={!customerId}
+                    onClick={deleteCurrentCustomer}
+                  >
+                    <Icon name="trash" className="h-4 w-4" />
+                  </IconButton>
+                </div>
               </Field>
               <Field label="Invoice date">
                 <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -439,6 +490,10 @@ export default function Invoices() {
           onMeta={(patch) => patchInvoice(open.id, patch)}
           onDelete={() => del(open)}
         />
+      )}
+
+      {custModal && (
+        <CustomerModal initial={custModal.customer} onClose={() => setCustModal(null)} onSaved={handleCustomerSaved} />
       )}
     </>
   )

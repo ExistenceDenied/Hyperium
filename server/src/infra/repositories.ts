@@ -1,6 +1,7 @@
 import { periodKey } from '@af/core'
 import type {
   ArchiveRepository,
+  Customer,
   ExpenseNote,
   ExpenseRepository,
   GeneratedDocument,
@@ -24,6 +25,27 @@ export const settingsRepo: SettingsRepository = {
       return s
     })
   },
+}
+
+/**
+ * Add or update a customer in-place, touching ONLY settings.customers. This
+ * deliberately avoids a whole-settings save, which would risk writing back a
+ * stale company.nextInvoiceSeq and rewinding the invoice counter.
+ */
+export async function upsertCustomer(customer: Customer): Promise<Customer> {
+  return db.mutate((d) => {
+    const i = d.settings.customers.findIndex((c) => c.id === customer.id)
+    if (i >= 0) d.settings.customers[i] = customer
+    else d.settings.customers.push(customer)
+    return customer
+  })
+}
+
+/** Remove a customer by id. Existing documents keep their stored customerId. */
+export async function removeCustomer(id: string): Promise<void> {
+  await db.mutate((d) => {
+    d.settings.customers = d.settings.customers.filter((c) => c.id !== id)
+  })
 }
 
 export const timesheetRepo: TimesheetRepository = {

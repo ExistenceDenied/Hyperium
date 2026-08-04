@@ -4,6 +4,7 @@ import {
   buildInvoice,
   CommentSchema,
   currentPeriod,
+  CustomerSchema,
   DocStatusSchema,
   monthlyDashboard,
   parsePeriodKey,
@@ -20,9 +21,11 @@ import {
   createInvoiceAtomic,
   expenseRepo,
   invoiceRepo,
+  removeCustomer,
   renameArchiveTitle,
   settingsRepo,
   timesheetRepo,
+  upsertCustomer,
 } from './infra/repositories.js'
 import { documentStore } from './infra/documentStore.js'
 import { generateDocument } from './app/documents.js'
@@ -37,6 +40,22 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.put('/api/settings', async (req) => {
     const parsed = SettingsSchema.parse(req.body)
     return settingsRepo.save(parsed)
+  })
+
+  // ---- Customers ------------------------------------------------------------
+  // Mutate only settings.customers, so the invoice counter is never disturbed.
+  app.post('/api/customers', async (req) => {
+    const customer = CustomerSchema.parse(req.body)
+    return upsertCustomer(customer)
+  })
+  app.put('/api/customers/:id', async (req) => {
+    const { id } = req.params as { id: string }
+    const customer = CustomerSchema.parse({ ...(req.body as object), id })
+    return upsertCustomer(customer)
+  })
+  app.delete('/api/customers/:id', async (req) => {
+    await removeCustomer((req.params as { id: string }).id)
+    return { ok: true }
   })
 
   // ---- Timesheets -----------------------------------------------------------

@@ -200,6 +200,50 @@ test('archive document lifecycle (generate -> rename -> download -> delete)', as
   assert.ok(!after.body.some((d: any) => d.id === docId))
 })
 
+// ---- customer CRUD (must never disturb the invoice counter) -----------------
+test('customer create / update / delete leave nextInvoiceSeq untouched', async () => {
+  // Advance the counter first so we can prove customer writes don't rewind it.
+  await api('POST', '/api/invoices', { customerId: 'c1', date: '2026-07-20', timesheetId: tsId, basis: 'day' })
+  const seqBefore = (await api('GET', '/api/settings')).body.company.nextInvoiceSeq
+
+  // create
+  const created = await api('POST', '/api/customers', {
+    id: 'cust-new',
+    company: 'New Client BV',
+    contactPerson: 'Ada',
+    addressLines: ['Nieuwstraat 1'],
+    vatNumber: 'BE0111.222.333',
+    email: 'ada@new.be',
+    defaultDayRate: 1200,
+    defaultHourlyRate: 150,
+    paymentTermsDays: 45,
+    vatTreatment: 'reverse_charge_eu',
+  })
+  assert.equal(created.status, 200)
+  assert.equal(created.body.company, 'New Client BV')
+  let settings = await api('GET', '/api/settings')
+  assert.ok(settings.body.customers.some((c: any) => c.id === 'cust-new'))
+  assert.equal(settings.body.company.nextInvoiceSeq, seqBefore, 'create must not touch the counter')
+
+  // update
+  const updated = await api('PUT', '/api/customers/cust-new', { company: 'Renamed Client BV', defaultDayRate: 1300, vatTreatment: 'standard' })
+  assert.equal(updated.status, 200)
+  assert.equal(updated.body.company, 'Renamed Client BV')
+  assert.equal(updated.body.defaultDayRate, 1300)
+  settings = await api('GET', '/api/settings')
+  assert.equal(settings.body.customers.find((c: any) => c.id === 'cust-new').company, 'Renamed Client BV')
+  assert.equal(settings.body.company.nextInvoiceSeq, seqBefore, 'update must not touch the counter')
+
+  // delete
+  const del = await api('DELETE', '/api/customers/cust-new')
+  assert.equal(del.status, 200)
+  settings = await api('GET', '/api/settings')
+  assert.ok(!settings.body.customers.some((c: any) => c.id === 'cust-new'))
+  assert.equal(settings.body.company.nextInvoiceSeq, seqBefore, 'delete must not touch the counter')
+  // the original customer survives
+  assert.ok(settings.body.customers.some((c: any) => c.id === 'c1'))
+})
+
 // ---- invoice edit + identity lock -------------------------------------------
 test('PUT /api/invoices edits fields but locks the legal identity', async () => {
   const created = await api('POST', '/api/invoices', { customerId: 'c1', date: '2026-08-01', timesheetId: tsId, basis: 'day' })

@@ -1,6 +1,7 @@
 import type {
   BillingBasis,
   Comment,
+  Customer,
   DashboardData,
   DocStatus,
   ExpenseNote,
@@ -52,6 +53,11 @@ export interface UpdateInvoiceInput {
 export const api = {
   getSettings: () => req<Settings>('/settings'),
   saveSettings: (s: Settings) => req<Settings>('/settings', { method: 'PUT', body: JSON.stringify(s) }),
+
+  // Customer CRUD — touches only settings.customers (leaves the invoice counter alone).
+  createCustomer: (c: Customer) => req<Customer>('/customers', { method: 'POST', body: JSON.stringify(c) }),
+  updateCustomer: (c: Customer) => req<Customer>(`/customers/${c.id}`, { method: 'PUT', body: JSON.stringify(c) }),
+  deleteCustomer: (id: string) => req<{ ok: boolean }>(`/customers/${id}`, { method: 'DELETE' }),
 
   listTimesheets: () => req<Timesheet[]>('/timesheets'),
   timesheetForPeriod: (key: string) => req<Timesheet>(`/timesheets/period/${key}`),
