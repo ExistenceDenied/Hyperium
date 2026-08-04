@@ -14,9 +14,18 @@ export default function Settings() {
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [custModal, setCustModal] = useState<{ customer: Customer | null } | null>(null)
+  // The invoice counter as it was when this page loaded — used at save time to
+  // tell an untouched field from an intentional change (see save()).
+  const [loadedSeq, setLoadedSeq] = useState<number | null>(null)
 
   useEffect(() => {
-    api.getSettings().then(setS).catch((e) => notify('err', String(e)))
+    api
+      .getSettings()
+      .then((v) => {
+        setS(v)
+        setLoadedSeq(v.company.nextInvoiceSeq)
+      })
+      .catch((e) => notify('err', String(e)))
   }, [notify])
 
   if (!s) return <Spinner />
@@ -58,9 +67,26 @@ export default function Settings() {
   const save = async () => {
     setSaving(true)
     try {
-      const saved = await api.saveSettings(s)
+      // Re-read server state first. The invoice counter advances on every invoice
+      // created since this page loaded; a naive whole-object save would write back
+      // the stale value and rewind it, reissuing invoice numbers. Preserve the
+      // server's counter unless the owner explicitly edited the field. Customers
+      // are owned by their own endpoints, so always take the server's copy.
+      const fresh = await api.getSettings()
+      const seqTouched = loadedSeq != null && s.company.nextInvoiceSeq !== loadedSeq
+      const payload: SettingsType = {
+        company: {
+          ...s.company,
+          nextInvoiceSeq: seqTouched ? s.company.nextInvoiceSeq : fresh.company.nextInvoiceSeq,
+        },
+        financial: s.financial,
+        customers: fresh.customers,
+      }
+      const saved = await api.saveSettings(payload)
       setS(saved)
+      setLoadedSeq(saved.company.nextInvoiceSeq)
       setDirty(false)
+      reloadCtx()
       notify('ok', 'Settings saved')
     } catch (e) {
       notify('err', String(e))
@@ -71,6 +97,7 @@ export default function Settings() {
   const discard = () => {
     api.getSettings().then((fresh) => {
       setS(fresh)
+      setLoadedSeq(fresh.company.nextInvoiceSeq)
       setDirty(false)
       notify('ok', 'Changes discarded')
     })
@@ -126,7 +153,7 @@ export default function Settings() {
             <Field label="Invoice number format" hint="Tokens: {year} {seq} {seq:3}">
               <input className="input" value={s.company.invoiceNumberFormat} onChange={(e) => company('invoiceNumberFormat', e.target.value)} />
             </Field>
-            <Field label="Next invoice number">
+            <Field label="Next invoice number" hint="Advances automatically as invoices are created — only change to override">
               <input
                 type="number"
                 className="input"
