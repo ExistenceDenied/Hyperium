@@ -16,7 +16,7 @@ import {
   vatMention,
   vatTreatmentLabel,
 } from '@af/core'
-import type { DocumentGenerator, ExpenseNote, Invoice, Settings, Timesheet } from '@af/core'
+import type { Customer, DocumentGenerator, ExpenseNote, Invoice, Settings, Timesheet } from '@af/core'
 
 // House typeface — IBM Plex (SIL OFL), embedded into every PDF via pdfkit font subsetting.
 // Plex Sans is the workhorse; Plex Serif gives the wordmark and titles their gravitas.
@@ -246,9 +246,9 @@ function buildDoc(content: Content[], s: Settings): TDocumentDefinitions {
 }
 
 // ---- Timesheet --------------------------------------------------------------
-function timesheetContent(t: Timesheet, s: Settings): Content[] {
+function timesheetContent(t: Timesheet, s: Settings, customers: Customer[]): Content[] {
   const tot = timesheetTotals(t)
-  const custName = (id?: string) => s.customers.find((c) => c.id === id)?.company ?? ''
+  const custName = (id?: string) => customers.find((c) => c.id === id)?.company ?? ''
   const rows: Content[][] = [...t.days]
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((d): Content[] => [
@@ -284,8 +284,8 @@ function timesheetContent(t: Timesheet, s: Settings): Content[] {
 }
 
 // ---- Invoice ----------------------------------------------------------------
-function invoiceContent(inv: Invoice, s: Settings): Content[] {
-  const cust = s.customers.find((c) => c.id === inv.customerId)
+function invoiceContent(inv: Invoice, s: Settings, customers: Customer[]): Content[] {
+  const cust = customers.find((c) => c.id === inv.customerId)
   const tot = invoiceTotals(inv)
   const mention = vatMention[inv.vatTreatment]
   const meta: [string, string][] = [
@@ -352,9 +352,9 @@ function invoiceContent(inv: Invoice, s: Settings): Content[] {
 }
 
 // ---- Expense note -----------------------------------------------------------
-function expenseContent(e: ExpenseNote, s: Settings): Content[] {
+function expenseContent(e: ExpenseNote, s: Settings, customers: Customer[]): Content[] {
   const tot = expenseTotals(e)
-  const custName = (id?: string) => s.customers.find((c) => c.id === id)?.company ?? ''
+  const custName = (id?: string) => customers.find((c) => c.id === id)?.company ?? ''
   const content: Content[] = [
     ...masthead(s),
     titleBlock('Expense note', monthLabel(e.period)),
@@ -425,7 +425,7 @@ function expenseContent(e: ExpenseNote, s: Settings): Content[] {
 
 export const pdfGenerator: DocumentGenerator = {
   format: 'pdf',
-  timesheet: (t, s) => render(buildDoc(timesheetContent(t, s), s)),
-  invoice: (i, s) => render(buildDoc(invoiceContent(i, s), s)),
-  expense: (e, s) => render(buildDoc(expenseContent(e, s), s)),
+  timesheet: (t, s, customers) => render(buildDoc(timesheetContent(t, s, customers), s)),
+  invoice: (i, s, customers) => render(buildDoc(invoiceContent(i, s, customers), s)),
+  expense: (e, s, customers) => render(buildDoc(expenseContent(e, s, customers), s)),
 }

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { monthLabel, periodKey } from '@af/core'
-import type { DocFormat, DocKind, GeneratedDocument, Settings } from '@af/core'
-import { archiveRepo, expenseRepo, invoiceRepo, settingsRepo, timesheetRepo } from '../infra/repositories.js'
+import type { Customer, DocFormat, DocKind, GeneratedDocument, Settings } from '@af/core'
+import { archiveRepo, customerRepo, expenseRepo, invoiceRepo, settingsRepo, timesheetRepo } from '../infra/repositories.js'
 import { documentStore } from '../infra/documentStore.js'
 import { pdfGenerator } from '../infra/pdf.js'
 import { wordGenerator } from '../infra/word.js'
@@ -18,13 +18,13 @@ interface Resolved {
   baseName: string
 }
 
-async function resolve(kind: DocKind, refId: string, format: DocFormat, s: Settings): Promise<Resolved> {
+async function resolve(kind: DocKind, refId: string, format: DocFormat, s: Settings, customers: Customer[]): Promise<Resolved> {
   const gen = generators[format]
   if (kind === 'timesheet') {
     const t = await timesheetRepo.get(refId)
     if (!t) throw new Error('Timesheet not found')
     return {
-      bytes: await gen.timesheet(t, s),
+      bytes: await gen.timesheet(t, s, customers),
       title: `Timesheet — ${monthLabel(t.period)}`,
       periodKey: periodKey(t.period),
       baseName: `timesheet-${periodKey(t.period)}`,
@@ -34,7 +34,7 @@ async function resolve(kind: DocKind, refId: string, format: DocFormat, s: Setti
     const inv = await invoiceRepo.get(refId)
     if (!inv) throw new Error('Invoice not found')
     return {
-      bytes: await gen.invoice(inv, s),
+      bytes: await gen.invoice(inv, s, customers),
       title: `Invoice ${inv.number}`,
       number: inv.number,
       baseName: `invoice-${slug(inv.number)}`,
@@ -43,7 +43,7 @@ async function resolve(kind: DocKind, refId: string, format: DocFormat, s: Setti
   const e = await expenseRepo.get(refId)
   if (!e) throw new Error('Expense note not found')
   return {
-    bytes: await gen.expense(e, s),
+    bytes: await gen.expense(e, s, customers),
     title: `Expense note — ${monthLabel(e.period)}`,
     periodKey: periodKey(e.period),
     baseName: `expense-${periodKey(e.period)}`,
@@ -53,7 +53,8 @@ async function resolve(kind: DocKind, refId: string, format: DocFormat, s: Setti
 /** Generate a document, store the bytes on disk with version history, and record it in the archive. */
 export async function generateDocument(kind: DocKind, refId: string, format: DocFormat): Promise<GeneratedDocument> {
   const settings = await settingsRepo.get()
-  const r = await resolve(kind, refId, format, settings)
+  const customers = await customerRepo.list()
+  const r = await resolve(kind, refId, format, settings, customers)
 
   const existing = (await archiveRepo.list()).filter((d) => d.kind === kind && d.refId === refId && d.format === format)
   const version = existing.length + 1

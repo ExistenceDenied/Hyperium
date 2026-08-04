@@ -52,21 +52,20 @@ const SETTINGS = (nextInvoiceSeq = 1) => ({
     nextInvoiceSeq,
   },
   financial: { standardVatRatePct: 21, mileageRatePerKm: 0.4415, defaultTemplate: 'default' },
-  customers: [
-    {
-      id: 'c1',
-      company: 'Client NV',
-      contactPerson: 'Jan',
-      addressLines: ['Bankstraat 9', '1000 Brussel'],
-      vatNumber: 'BE0999.888.777',
-      email: 'ap@client.be',
-      defaultDayRate: 1000,
-      defaultHourlyRate: 125,
-      paymentTermsDays: 30,
-      vatTreatment: 'standard',
-    },
-  ],
 })
+
+const CUSTOMER_C1 = {
+  id: 'c1',
+  company: 'Client NV',
+  contactPerson: 'Jan',
+  addressLines: ['Bankstraat 9', '1000 Brussel'],
+  vatNumber: 'BE0999.888.777',
+  email: 'ap@client.be',
+  defaultDayRate: 1000,
+  defaultHourlyRate: 125,
+  paymentTermsDays: 30,
+  vatTreatment: 'standard',
+}
 
 let tsId = ''
 let invId1 = ''
@@ -78,14 +77,27 @@ test('GET /api/health', async () => {
   assert.equal(r.body.ok, true)
 })
 
-// ---- settings ---------------------------------------------------------------
-test('settings round-trip', async () => {
+// ---- settings + customer seed -----------------------------------------------
+test('settings round-trip (company + financial only)', async () => {
   const put = await api('PUT', '/api/settings', SETTINGS(1))
   assert.equal(put.status, 200)
   const get = await api('GET', '/api/settings')
   assert.equal(get.body.company.nextInvoiceSeq, 1)
-  assert.equal(get.body.customers.length, 1)
-  assert.equal(get.body.customers[0].company, 'Client NV')
+  assert.equal(get.body.company.name, 'Test BV')
+  // Settings is no longer a home for customers.
+  assert.equal(get.body.customers, undefined)
+})
+
+test('customers are a top-level collection', async () => {
+  const created = await api('POST', '/api/customers', CUSTOMER_C1)
+  assert.equal(created.status, 200)
+  const list = await api('GET', '/api/customers')
+  assert.equal(list.status, 200)
+  assert.equal(list.body.length, 1)
+  assert.equal(list.body[0].company, 'Client NV')
+  // and are NOT surfaced through settings
+  const settings = await api('GET', '/api/settings')
+  assert.equal(settings.body.customers, undefined)
 })
 
 // ---- timesheet CRUD ---------------------------------------------------------
@@ -221,27 +233,26 @@ test('customer create / update / delete leave nextInvoiceSeq untouched', async (
   })
   assert.equal(created.status, 200)
   assert.equal(created.body.company, 'New Client BV')
-  let settings = await api('GET', '/api/settings')
-  assert.ok(settings.body.customers.some((c: any) => c.id === 'cust-new'))
-  assert.equal(settings.body.company.nextInvoiceSeq, seqBefore, 'create must not touch the counter')
+  const seqOf = async () => (await api('GET', '/api/settings')).body.company.nextInvoiceSeq
+  const customersNow = async () => (await api('GET', '/api/customers')).body as any[]
+  assert.ok((await customersNow()).some((c) => c.id === 'cust-new'))
+  assert.equal(await seqOf(), seqBefore, 'create must not touch the counter')
 
   // update
   const updated = await api('PUT', '/api/customers/cust-new', { company: 'Renamed Client BV', defaultDayRate: 1300, vatTreatment: 'standard' })
   assert.equal(updated.status, 200)
   assert.equal(updated.body.company, 'Renamed Client BV')
   assert.equal(updated.body.defaultDayRate, 1300)
-  settings = await api('GET', '/api/settings')
-  assert.equal(settings.body.customers.find((c: any) => c.id === 'cust-new').company, 'Renamed Client BV')
-  assert.equal(settings.body.company.nextInvoiceSeq, seqBefore, 'update must not touch the counter')
+  assert.equal((await customersNow()).find((c) => c.id === 'cust-new').company, 'Renamed Client BV')
+  assert.equal(await seqOf(), seqBefore, 'update must not touch the counter')
 
   // delete
   const del = await api('DELETE', '/api/customers/cust-new')
   assert.equal(del.status, 200)
-  settings = await api('GET', '/api/settings')
-  assert.ok(!settings.body.customers.some((c: any) => c.id === 'cust-new'))
-  assert.equal(settings.body.company.nextInvoiceSeq, seqBefore, 'delete must not touch the counter')
+  assert.ok(!(await customersNow()).some((c) => c.id === 'cust-new'))
+  assert.equal(await seqOf(), seqBefore, 'delete must not touch the counter')
   // the original customer survives
-  assert.ok(settings.body.customers.some((c: any) => c.id === 'c1'))
+  assert.ok((await customersNow()).some((c) => c.id === 'c1'))
 })
 
 // ---- invoice edit + identity lock -------------------------------------------

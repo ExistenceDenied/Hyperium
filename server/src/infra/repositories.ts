@@ -2,6 +2,7 @@ import { periodKey } from '@af/core'
 import type {
   ArchiveRepository,
   Customer,
+  CustomerRepository,
   ExpenseNote,
   ExpenseRepository,
   GeneratedDocument,
@@ -27,25 +28,31 @@ export const settingsRepo: SettingsRepository = {
   },
 }
 
-/**
- * Add or update a customer in-place, touching ONLY settings.customers. This
- * deliberately avoids a whole-settings save, which would risk writing back a
- * stale company.nextInvoiceSeq and rewinding the invoice counter.
- */
-export async function upsertCustomer(customer: Customer): Promise<Customer> {
-  return db.mutate((d) => {
-    const i = d.settings.customers.findIndex((c) => c.id === customer.id)
-    if (i >= 0) d.settings.customers[i] = customer
-    else d.settings.customers.push(customer)
-    return customer
-  })
-}
-
-/** Remove a customer by id. Existing documents keep their stored customerId. */
-export async function removeCustomer(id: string): Promise<void> {
-  await db.mutate((d) => {
-    d.settings.customers = d.settings.customers.filter((c) => c.id !== id)
-  })
+/** Customers are their own top-level collection, referenced by invoices,
+ *  timesheets and expenses. Kept separate from settings so customer edits never
+ *  round-trip the singleton config (and its invoice counter). */
+export const customerRepo: CustomerRepository = {
+  async list() {
+    await db.ensureLoaded()
+    return [...db.get().customers]
+  },
+  async get(id) {
+    await db.ensureLoaded()
+    return db.get().customers.find((c) => c.id === id)
+  },
+  async save(customer: Customer) {
+    return db.mutate((d) => {
+      const i = d.customers.findIndex((c) => c.id === customer.id)
+      if (i >= 0) d.customers[i] = customer
+      else d.customers.push(customer)
+      return customer
+    })
+  },
+  async remove(id) {
+    await db.mutate((d) => {
+      d.customers = d.customers.filter((c) => c.id !== id)
+    })
+  },
 }
 
 export const timesheetRepo: TimesheetRepository = {

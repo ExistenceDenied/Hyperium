@@ -16,7 +16,7 @@ type DraftLine = InvoiceLine & { key: string }
 
 export default function Invoices() {
   const notify = useToast()
-  const { settings, reload: reloadSettings } = useSettingsCtx()
+  const { settings, customers, reload: reloadSettings } = useSettingsCtx()
   const period = usePeriod()
   const location = useLocation()
   const [invoices, setInvoices] = useState<Invoice[] | null>(null)
@@ -40,7 +40,7 @@ export default function Invoices() {
   // Pick a customer and adopt its defaults (VAT treatment + payment terms).
   const chooseCustomer = (id: string) => {
     setCustomerId(id)
-    const c = settings?.customers.find((x) => x.id === id)
+    const c = customers.find((x) => x.id === id)
     if (c) {
       setVatTreatment(c.vatTreatment)
       setPaymentTermsDays(c.paymentTermsDays)
@@ -51,7 +51,7 @@ export default function Invoices() {
   //      which never disturb the invoice counter) --------------------------------
   const openNewCustomer = () => setCustModal({ customer: null })
   const openEditCustomer = () => {
-    const c = settings?.customers.find((x) => x.id === customerId)
+    const c = customers.find((x) => x.id === customerId)
     if (c) setCustModal({ customer: c })
   }
   const handleCustomerSaved = (saved: Customer, wasNew: boolean) => {
@@ -61,12 +61,12 @@ export default function Invoices() {
     notify('ok', `Customer ${saved.company} ${wasNew ? 'added' : 'updated'}`)
   }
   const deleteCurrentCustomer = async () => {
-    const c = settings?.customers.find((x) => x.id === customerId)
+    const c = customers.find((x) => x.id === customerId)
     if (!c) return
     if (!window.confirm(`Delete customer ${c.company}? Existing invoices keep their details; new invoices can't use it.`)) return
     try {
       await api.deleteCustomer(c.id)
-      const remaining = (settings?.customers ?? []).filter((x) => x.id !== c.id)
+      const remaining = customers.filter((x) => x.id !== c.id)
       setCustomerId(remaining[0]?.id ?? '')
       reloadSettings()
       notify('ok', `Customer ${c.company} deleted`)
@@ -80,9 +80,9 @@ export default function Invoices() {
     load().catch((e) => notify('err', String(e)))
   }, [notify])
   useEffect(() => {
-    if (settings && !customerId && settings.customers[0]) chooseCustomer(settings.customers[0].id)
+    if (!customerId && customers[0]) chooseCustomer(customers[0].id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, customerId])
+  }, [customers, customerId])
 
   // Arriving from the Timesheet's "Generate invoice" — preselect the month and,
   // if all billable days point at one customer, that customer too.
@@ -99,12 +99,12 @@ export default function Invoices() {
   }, [location.state, settings])
 
   const customerName = useMemo(
-    () => (id: string) => settings?.customers.find((c) => c.id === id)?.company ?? '—',
-    [settings],
+    () => (id: string) => customers.find((c) => c.id === id)?.company ?? '—',
+    [customers],
   )
   const selectedCustomer = useMemo(
-    () => settings?.customers.find((c) => c.id === customerId),
-    [settings, customerId],
+    () => customers.find((c) => c.id === customerId),
+    [customers, customerId],
   )
 
   const create = async () => {
@@ -194,7 +194,7 @@ export default function Invoices() {
     setReference('')
     setFromTimesheet(true)
     setDate(today())
-    if (settings?.customers[0]) chooseCustomer(settings.customers[0].id)
+    if (customers[0]) chooseCustomer(customers[0].id)
   }
 
   const saveEdit = async () => {
@@ -242,7 +242,7 @@ export default function Invoices() {
             </button>
           )}
         </div>
-        {settings.customers.length === 0 ? (
+        {customers.length === 0 ? (
           <Empty>
             <p>You need a customer before you can invoice.</p>
             <button className="btn-ghost btn-sm mt-3 inline-flex" onClick={openNewCustomer}>
@@ -255,7 +255,7 @@ export default function Invoices() {
               <Field label="Customer">
                 <div className="flex items-center gap-1.5">
                   <select className="input flex-1" value={customerId} onChange={(e) => chooseCustomer(e.target.value)}>
-                    {settings.customers.map((c) => (
+                    {customers.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.company}
                       </option>

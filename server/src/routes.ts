@@ -19,13 +19,12 @@ import type { ExpenseNote, Invoice, Timesheet } from '@af/core'
 import {
   archiveRepo,
   createInvoiceAtomic,
+  customerRepo,
   expenseRepo,
   invoiceRepo,
-  removeCustomer,
   renameArchiveTitle,
   settingsRepo,
   timesheetRepo,
-  upsertCustomer,
 } from './infra/repositories.js'
 import { documentStore } from './infra/documentStore.js'
 import { generateDocument } from './app/documents.js'
@@ -42,19 +41,25 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return settingsRepo.save(parsed)
   })
 
-  // ---- Customers ------------------------------------------------------------
-  // Mutate only settings.customers, so the invoice counter is never disturbed.
+  // ---- Customers (a top-level collection, not part of settings) -------------
+  app.get('/api/customers', async () => customerRepo.list())
+  app.get('/api/customers/:id', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const c = await customerRepo.get(id)
+    if (!c) return reply.code(404).send({ error: 'not found' })
+    return c
+  })
   app.post('/api/customers', async (req) => {
     const customer = CustomerSchema.parse(req.body)
-    return upsertCustomer(customer)
+    return customerRepo.save(customer)
   })
   app.put('/api/customers/:id', async (req) => {
     const { id } = req.params as { id: string }
     const customer = CustomerSchema.parse({ ...(req.body as object), id })
-    return upsertCustomer(customer)
+    return customerRepo.save(customer)
   })
   app.delete('/api/customers/:id', async (req) => {
-    await removeCustomer((req.params as { id: string }).id)
+    await customerRepo.remove((req.params as { id: string }).id)
     return { ok: true }
   })
 
@@ -112,7 +117,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/invoices', async (req, reply) => {
     const body = CreateInvoiceBody.parse(req.body)
     const settings = await settingsRepo.get()
-    const customer = settings.customers.find((c) => c.id === body.customerId)
+    const customer = await customerRepo.get(body.customerId)
     if (!customer) return reply.code(400).send({ error: 'unknown customer' })
     const timesheet = body.timesheetId ? await timesheetRepo.get(body.timesheetId) : undefined
     const year = (timesheet?.period ?? currentPeriod(new Date())).year

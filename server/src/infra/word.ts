@@ -27,7 +27,7 @@ import {
   vatMention,
   vatTreatmentLabel,
 } from '@af/core'
-import type { DocumentGenerator, ExpenseNote, Invoice, Settings, Timesheet } from '@af/core'
+import type { Customer, DocumentGenerator, ExpenseNote, Invoice, Settings, Timesheet } from '@af/core'
 import { embedFonts } from './embedFonts.js'
 
 // ---- Design tokens ----------------------------------------------------------
@@ -263,9 +263,9 @@ function pack(children: (Paragraph | Table)[], s: Settings): Promise<Uint8Array>
 }
 
 // ---- Timesheet --------------------------------------------------------------
-function timesheetChildren(t2: Timesheet, s: Settings): (Paragraph | Table)[] {
+function timesheetChildren(t2: Timesheet, s: Settings, customers: Customer[]): (Paragraph | Table)[] {
   const tot = timesheetTotals(t2)
-  const custName = (id?: string) => s.customers.find((c) => c.id === id)?.company ?? ''
+  const custName = (id?: string) => customers.find((c) => c.id === id)?.company ?? ''
   return [
     ...masthead(s),
     ...titleBlock('Timesheet', monthLabel(t2.period)),
@@ -301,8 +301,8 @@ function timesheetChildren(t2: Timesheet, s: Settings): (Paragraph | Table)[] {
 }
 
 // ---- Invoice ----------------------------------------------------------------
-function invoiceChildren(inv: Invoice, s: Settings): (Paragraph | Table)[] {
-  const cust = s.customers.find((c) => c.id === inv.customerId)
+function invoiceChildren(inv: Invoice, s: Settings, customers: Customer[]): (Paragraph | Table)[] {
+  const cust = customers.find((c) => c.id === inv.customerId)
   const tot = invoiceTotals(inv)
   const mention = vatMention[inv.vatTreatment]
   const metaLine = `Invoice no. ${inv.number}    ·    Issue ${inv.date}    ·    Due ${inv.dueDate}${inv.reference ? `    ·    Ref ${inv.reference}` : ''}`
@@ -349,9 +349,9 @@ function invoiceChildren(inv: Invoice, s: Settings): (Paragraph | Table)[] {
 }
 
 // ---- Expense note -----------------------------------------------------------
-function expenseChildren(e: ExpenseNote, s: Settings): (Paragraph | Table)[] {
+function expenseChildren(e: ExpenseNote, s: Settings, customers: Customer[]): (Paragraph | Table)[] {
   const tot = expenseTotals(e)
-  const custName = (id?: string) => s.customers.find((c) => c.id === id)?.company ?? ''
+  const custName = (id?: string) => customers.find((c) => c.id === id)?.company ?? ''
   const children: (Paragraph | Table)[] = [
     ...masthead(s),
     ...titleBlock('Expense note', monthLabel(e.period)),
@@ -413,7 +413,7 @@ function expenseChildren(e: ExpenseNote, s: Settings): (Paragraph | Table)[] {
 
 export const wordGenerator: DocumentGenerator = {
   format: 'docx',
-  timesheet: (ts, s) => pack(timesheetChildren(ts, s), s),
-  invoice: (i, s) => pack(invoiceChildren(i, s), s),
-  expense: (e, s) => pack(expenseChildren(e, s), s),
+  timesheet: (ts, s, customers) => pack(timesheetChildren(ts, s, customers), s),
+  invoice: (i, s, customers) => pack(invoiceChildren(i, s, customers), s),
+  expense: (e, s, customers) => pack(expenseChildren(e, s, customers), s),
 }

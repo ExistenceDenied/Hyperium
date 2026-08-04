@@ -2,6 +2,8 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { dirname } from 'node:path'
 import {
+  Customer,
+  CustomerSchema,
   ExpenseNote,
   ExpenseNoteSchema,
   GeneratedDocument,
@@ -16,6 +18,7 @@ import { DATA_DIR, DB_FILE } from './paths.js'
 
 export interface DbShape {
   settings: Settings
+  customers: Customer[]
   timesheets: Timesheet[]
   invoices: Invoice[]
   expenses: ExpenseNote[]
@@ -23,7 +26,8 @@ export interface DbShape {
 }
 
 const defaultDb = (): DbShape => ({
-  settings: SettingsSchema.parse({ company: {}, financial: {}, customers: [] }),
+  settings: SettingsSchema.parse({ company: {}, financial: {} }),
+  customers: [],
   timesheets: [],
   invoices: [],
   expenses: [],
@@ -41,16 +45,25 @@ export class Db {
     await mkdir(DATA_DIR, { recursive: true })
     if (existsSync(DB_FILE)) {
       const raw = await readFile(DB_FILE, 'utf8')
-      const parsed = JSON.parse(raw) as Partial<DbShape>
+      // Older files nested customers under settings; read from there when the
+      // top-level collection is absent. On the next flush the file is rewritten
+      // in the new shape (customers top-level, settings without them) — a silent,
+      // one-way migration. SettingsSchema no longer has `customers`, so parsing
+      // settings drops the legacy key automatically.
+      const parsed = JSON.parse(raw) as Partial<DbShape> & { settings?: { customers?: unknown[] } }
+      const legacyCustomers = Array.isArray(parsed.settings?.customers) ? parsed.settings.customers : []
+      const rawCustomers = parsed.customers ?? legacyCustomers
       // Parse each record through its schema so older data gains any new
       // fields (e.g. status / comments) via their defaults.
       this.data = {
-        settings: SettingsSchema.parse(parsed.settings ?? { company: {}, financial: {}, customers: [] }),
+        settings: SettingsSchema.parse(parsed.settings ?? { company: {}, financial: {} }),
+        customers: rawCustomers.map((c) => CustomerSchema.parse(c)),
         timesheets: (parsed.timesheets ?? []).map((t) => TimesheetSchema.parse(t)),
         invoices: (parsed.invoices ?? []).map((i) => InvoiceSchema.parse(i)),
         expenses: (parsed.expenses ?? []).map((e) => ExpenseNoteSchema.parse(e)),
         archive: parsed.archive ?? [],
       }
+      if (parsed.customers === undefined && legacyCustomers.length > 0) await this.flush()
     } else {
       await this.flush()
     }

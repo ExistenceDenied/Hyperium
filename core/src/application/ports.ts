@@ -1,4 +1,5 @@
 import type {
+  Customer,
   DocFormat,
   DocKind,
   ExpenseNote,
@@ -39,14 +40,20 @@ export interface ArchiveRepository {
   add(doc: GeneratedDocument): Promise<GeneratedDocument>
   remove(id: string): Promise<GeneratedDocument | undefined>
 }
+export interface CustomerRepository {
+  list(): Promise<Customer[]>
+  get(id: string): Promise<Customer | undefined>
+  save(c: Customer): Promise<Customer>
+  remove(id: string): Promise<void>
+}
 
 // ---- Document generation (ports) --------------------------------------------
 /** Renders a domain object to document bytes. Implemented in infrastructure (pdfmake / docx). */
 export interface DocumentGenerator {
   format: DocFormat
-  timesheet(t: Timesheet, s: Settings): Promise<Uint8Array>
-  invoice(i: Invoice, s: Settings): Promise<Uint8Array>
-  expense(e: ExpenseNote, s: Settings): Promise<Uint8Array>
+  timesheet(t: Timesheet, s: Settings, customers: Customer[]): Promise<Uint8Array>
+  invoice(i: Invoice, s: Settings, customers: Customer[]): Promise<Uint8Array>
+  expense(e: ExpenseNote, s: Settings, customers: Customer[]): Promise<Uint8Array>
 }
 
 /** Persists generated document bytes to disk (or any store) and returns where it landed. */

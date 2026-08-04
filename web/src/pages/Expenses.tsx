@@ -3,7 +3,7 @@ import type { ExpenseItem, ExpenseNote, MileageTrip } from '@af/core'
 import { expenseTotals, formatEUR, formatKm, monthDays, monthLabel, parsePeriodKey, periodKey, reimbursableKm, tripReimbursement } from '@af/core'
 import { api } from '../lib/api'
 import { usePeriod } from '../state/period'
-import { useSettings } from '../state/settings'
+import { useCustomers } from '../state/settings'
 import { Card, Empty, IconButton, PageHeader, Spinner, StatTile, useToast } from '../components/ui'
 import { GenerateButtons } from '../components/GenerateButtons'
 import { CopyFrom } from '../components/CopyFrom'
@@ -15,7 +15,7 @@ const iso = (period: { year: number; month: number }) => `${period.year}-${Strin
 export default function Expenses() {
   const { key, label } = usePeriod()
   const notify = useToast()
-  const settings = useSettings()
+  const customers = useCustomers()
   const [note, setNote] = useState<ExpenseNote | null>(null)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -219,7 +219,7 @@ export default function Expenses() {
                     <td className="td">
                       <select className="input py-1.5" value={t.customerId ?? ''} onChange={(e) => setTrip(t.id, { customerId: e.target.value || undefined })}>
                         <option value="">—</option>
-                        {settings?.customers.map((c) => (
+                        {customers.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.company}
                           </option>

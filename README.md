@@ -104,7 +104,10 @@ Everything sits behind ports in `core/application/ports.ts`:
 
 ## API (all under `/api`)
 
-`GET/PUT /settings` · `GET /timesheets`, `GET /timesheets/period/:key`, `PUT /timesheets/:id` ·
-`GET /invoices`, `POST /invoices`, `GET /invoices/:id` · `GET /expenses/period/:key`,
+`GET/PUT /settings` (company + financial only) ·
+`GET /customers`, `POST /customers`, `GET/PUT/DELETE /customers/:id` (a top-level
+collection, referenced by invoices/timesheets/expenses — not part of settings) ·
+`GET /timesheets`, `GET /timesheets/period/:key`, `PUT /timesheets/:id` ·
+`GET /invoices`, `POST /invoices`, `GET/PUT /invoices/:id` · `GET /expenses/period/:key`,
 `PUT /expenses/:id` · `GET /dashboard/:key` · `GET /archive`, `POST /documents`,
-`GET /archive/:id/download`.
+`PATCH /archive/:id`, `GET /archive/:id/download`.

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Customer, Settings as SettingsType } from '@af/core'
 import { formatEUR, vatTreatmentLabel } from '@af/core'
 import { api } from '../lib/api'
-import { useSettingsCtx } from '../state/settings'
+import { useCustomers, useSettingsCtx } from '../state/settings'
 import { CustomerModal } from '../components/CustomerModal'
 import { Card, Field, IconButton, PageHeader, Spinner, useToast } from '../components/ui'
 import { Icon } from '../components/icons'
@@ -10,6 +10,7 @@ import { Icon } from '../components/icons'
 export default function Settings() {
   const notify = useToast()
   const { reload: reloadCtx } = useSettingsCtx()
+  const customers = useCustomers()
   const [s, setS] = useState<SettingsType | null>(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -39,15 +40,10 @@ export default function Settings() {
   const fin = <K extends keyof SettingsType['financial']>(k: K, v: SettingsType['financial'][K]) =>
     apply({ ...s, financial: { ...s.financial, [k]: v } })
 
-  // Customers persist immediately via the dedicated /customers endpoints, which
-  // touch only settings.customers — never the invoice counter. This is separate
-  // from the company/financial "Save settings" batch below.
+  // Customers are a top-level collection managed through their own endpoints and
+  // the shared context — independent of the company/financial "Save settings"
+  // batch below, so editing them never touches the invoice counter.
   const onCustomerSaved = (saved: Customer, wasNew: boolean) => {
-    setS((prev) =>
-      prev
-        ? { ...prev, customers: wasNew ? [...prev.customers, saved] : prev.customers.map((c) => (c.id === saved.id ? saved : c)) }
-        : prev,
-    )
     reloadCtx()
     setCustModal(null)
     notify('ok', `Customer ${saved.company} ${wasNew ? 'added' : 'updated'}`)
@@ -56,7 +52,6 @@ export default function Settings() {
     if (!window.confirm(`Delete customer ${c.company}? Existing invoices keep their details; new invoices can't use it.`)) return
     try {
       await api.deleteCustomer(c.id)
-      setS((prev) => (prev ? { ...prev, customers: prev.customers.filter((x) => x.id !== c.id) } : prev))
       reloadCtx()
       notify('ok', `Customer ${c.company} deleted`)
     } catch (e) {
@@ -80,7 +75,6 @@ export default function Settings() {
           nextInvoiceSeq: seqTouched ? s.company.nextInvoiceSeq : fresh.company.nextInvoiceSeq,
         },
         financial: s.financial,
-        customers: fresh.customers,
       }
       const saved = await api.saveSettings(payload)
       setS(saved)
@@ -196,11 +190,11 @@ export default function Settings() {
               <Icon name="plus" className="h-3.5 w-3.5" /> New customer
             </button>
           </div>
-          {s.customers.length === 0 ? (
+          {customers.length === 0 ? (
             <p className="text-sm text-ink-500">No customers yet.</p>
           ) : (
             <div className="divide-y divide-slate-100">
-              {s.customers.map((c) => (
+              {customers.map((c) => (
                 <div key={c.id} className="flex items-center justify-between gap-3 py-3">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium text-ink-900">{c.company || 'Unnamed customer'}</div>

@@ -9,7 +9,7 @@ import { GenerateButtons } from '../components/GenerateButtons'
 import { CopyFrom } from '../components/CopyFrom'
 import { DocMeta } from '../components/DocMeta'
 import { Icon } from '../components/icons'
-import { useSettings } from '../state/settings'
+import { useCustomers } from '../state/settings'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -22,7 +22,7 @@ export default function Timesheet() {
   const { key, label } = usePeriod()
   const notify = useToast()
   const navigate = useNavigate()
-  const settings = useSettings()
+  const customers = useCustomers()
   const [ts, setTs] = useState<TimesheetType | null>(null)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -259,7 +259,7 @@ export default function Timesheet() {
                           onChange={(e) => patchDay(d.date, { customerId: e.target.value || undefined })}
                         >
                           <option value="">—</option>
-                          {settings?.customers.map((c) => (
+                          {customers.map((c) => (
                             <option key={c.id} value={c.id}>
                               {c.company}
                             </option>

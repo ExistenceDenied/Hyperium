@@ -57,10 +57,11 @@ export const FinancialSettingsSchema = z.object({
 })
 export type FinancialSettings = z.infer<typeof FinancialSettingsSchema>
 
+// Customers are their own top-level collection (referenced by invoices,
+// timesheets and expenses); settings holds only company + financial config.
 export const SettingsSchema = z.object({
   company: CompanySchema,
   financial: FinancialSettingsSchema,
-  customers: z.array(CustomerSchema).default([]),
 })
 export type Settings = z.infer<typeof SettingsSchema>
 
