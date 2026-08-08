@@ -1,0 +1,19 @@
+{
+  "name": "admin-finance",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Hyperium BV — monthly financial administration (timesheets, invoices, expense notes).",
+  "type": "module",
+  "workspaces": ["core", "server", "web"],
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev -w @af/server",
+    "dev:web": "npm run dev -w @af/web",
+    "build": "npm run build -w @af/web",
+    "typecheck": "npm run typecheck -w @af/core && npm run typecheck -w @af/server && npm run typecheck -w @af/web",
+    "test": "npm run test -w @af/core && npm run test -w @af/server"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
