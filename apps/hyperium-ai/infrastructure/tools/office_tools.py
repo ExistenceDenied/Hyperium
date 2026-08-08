@@ -1,0 +1,117 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from core.tools.tool import Tool
+from infrastructure.documents import to_docx, to_pptx
+from infrastructure.tools.scoped import confine
+
+
+class WritePowerPointTool(Tool):
+    """Produce a .pptx deck from a slide outline, confined to a root directory."""
+
+    name = "write_powerpoint"
+    description = (
+        "Create a PowerPoint (.pptx) deck and save it. Give the deck content as "
+        "Markdown: each '## Heading' starts a new slide and the lines under it "
+        "become that slide's bullets; a line beginning 'Note:' becomes a speaker "
+        "note. Write a real, substantive deck — 6-10 slides that tell a story "
+        "(context, findings, analysis, recommendation, next steps), each with "
+        "3-6 specific, informative bullets and concrete detail, not one-liners "
+        "or placeholders. Use this to actually deliver a presentation."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "File to write, e.g. deck.pptx."},
+            "title": {"type": "string", "description": "Title-slide heading."},
+            "content": {
+                "type": "string",
+                "description": "The slide outline as Markdown (## per slide).",
+            },
+        },
+        "required": ["path", "title", "content"],
+    }
+
+    def __init__(self, root: Path, template=None) -> None:
+        self._root = root.resolve()
+        self._template = template
+
+    def preview(self, arguments: dict) -> str:
+        return f"Create a PowerPoint deck at {arguments.get('path')}."
+
+    def invoke(self, arguments: dict) -> str:
+        return _write(
+            self._root,
+            arguments,
+            lambda t, c: to_pptx(t, c, self._template),
+            ".pptx",
+            "PowerPoint deck",
+        )
+
+
+class WriteWordTool(Tool):
+    """Produce a .docx document from Markdown, confined to a root directory."""
+
+    name = "write_word"
+    description = (
+        "Create a Word (.docx) document and save it. Give the content as "
+        "Markdown — headings, paragraphs, bullet and numbered lists and tables "
+        "all come through as real Word formatting. Write substantive, specific "
+        "content in full paragraphs with a logical structure and concrete "
+        "detail — not a thin outline or placeholders. Use this to deliver a "
+        "report, proposal or letter as a Word file."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "File to write, e.g. report.docx.",
+            },
+            "title": {"type": "string", "description": "Document title."},
+            "content": {
+                "type": "string",
+                "description": "The document body as Markdown.",
+            },
+        },
+        "required": ["path", "title", "content"],
+    }
+
+    def __init__(self, root: Path, template=None) -> None:
+        self._root = root.resolve()
+        self._template = template
+
+    def preview(self, arguments: dict) -> str:
+        return f"Create a Word document at {arguments.get('path')}."
+
+    def invoke(self, arguments: dict) -> str:
+        return _write(
+            self._root,
+            arguments,
+            lambda t, c: to_docx(t, c, self._template),
+            ".docx",
+            "Word document",
+        )
+
+
+def _write(root: Path, arguments: dict, render, suffix: str, label: str) -> str:
+    raw = str(arguments.get("path", "")).strip()
+    if raw and not raw.lower().endswith(suffix):
+        raw += suffix
+    target = confine(root, raw) if raw else None
+
+    if target is None:
+        return f"Error: '{raw}' is outside the permitted directory."
+
+    title = str(arguments.get("title", "")).strip() or "Untitled"
+    content = str(arguments.get("content", ""))
+
+    try:
+        data = render(title, content)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    except Exception as error:
+        return f"Error: could not write '{raw}': {error}"
+
+    return f"Wrote {label} to {raw} ({len(data)} bytes)."

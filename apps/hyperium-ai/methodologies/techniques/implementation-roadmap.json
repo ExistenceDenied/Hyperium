@@ -1,0 +1,7 @@
+{
+  "key": "implementation-roadmap",
+  "name": "Implementation Roadmap",
+  "description": "Sequencing change into deliverable phases that respect dependencies, absorb capacity constraints, and release benefit as early as the logic allows.",
+  "capabilities": ["BUSINESS_ANALYSIS", "ARCHITECTURE"],
+  "guidance": "Break the change into phases or increments that each end in something usable, and for every one state its objective, scope, entry dependencies, exit criteria, and the benefit it unlocks. Show the dependency logic explicitly — which items are hard-sequenced by technical or regulatory necessity and which are merely convenient — because that distinction is where schedule compression is found. Front-load the work that reduces the most uncertainty and the quick wins that build sponsor confidence, and be honest that a phase delivering no observable value is a scheduling risk. Present the roadmap as a phase table with indicative durations and a horizon view, stating the capacity and skills each phase assumes. Avoid precise dates you cannot support: give relative sequencing and duration ranges, and name the assumptions that would move them."
+}

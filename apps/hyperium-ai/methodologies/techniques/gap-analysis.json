@@ -1,0 +1,7 @@
+{
+  "key": "gap-analysis",
+  "name": "Gap Analysis",
+  "description": "Quantified comparison of the current state against the required state, expressed as a set of discrete, addressable gaps rather than a general sense of shortfall.",
+  "capabilities": ["BUSINESS_ANALYSIS", "RESEARCH"],
+  "guidance": "State the current state and the target state side by side on the same dimensions, and give each dimension a measure with a unit — cycle time in days, error rate as a percentage, cost per transaction in currency — so the gap is a number and not an adjective. Present the comparison as a table with columns for dimension, current, target, gap, and source of evidence, and mark clearly which figures are measured, which are estimated, and which are assumed. Give every gap an identifier, a size, and an assessment of its business impact, then rank them so that the reader knows which two or three matter most. Where a target is not yet agreed, propose one and flag it for confirmation rather than leaving the column blank. Avoid gaps phrased as missing solutions ('no CRM system') — phrase them as shortfalls in outcome ('customer records are duplicated across four stores, causing a 12% mis-mailing rate')."
+}

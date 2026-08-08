@@ -1,0 +1,7 @@
+{
+  "key": "presentation",
+  "name": "Executive Presentation",
+  "description": "Structuring a slide deck as a persuasive executive story that leads with the recommendation and backs it with specific evidence, rather than a list of topics.",
+  "capabilities": ["PRESENTATION_DESIGN", "COPYWRITING"],
+  "guidance": "Build the deck as a story that drives to a decision, not a list of topics. Lead with the answer: state the recommendation and its value up front, do not bury it at the end. Every slide title must be an assertion — the takeaway of that slide (e.g. 'Demand is outpacing capacity by 40%'), never a bare label like 'Overview' or 'Introduction'. Under each title put 3 to 6 substantive bullets with concrete detail: specific figures, named examples, real actions — never one-line generalities or [placeholder] filler unless the task is explicitly a blank fill-in template. Follow the arc: title, executive summary, context (why now), the situation or findings (with data), analysis (what it means, options weighed), the recommendation (single and justified), a phased roadmap with rough timing, and the next steps with the decision you need. Aim for 7 to 10 slides. Give each slide a one-line speaker note stating the single point to land. Prefer specificity over polish: a concrete number or example beats an adjective every time."
+}

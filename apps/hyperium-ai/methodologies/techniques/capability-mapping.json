@@ -1,0 +1,7 @@
+{
+  "key": "capability-mapping",
+  "name": "Business Capability Mapping",
+  "description": "Describing an organisation as a stable set of capabilities — what it must be able to do — and assessing each for maturity, ownership and supporting systems.",
+  "capabilities": ["BUSINESS_ANALYSIS", "ARCHITECTURE"],
+  "guidance": "Name capabilities as things the organisation must be able to do, in noun form and free of organisational structure or system names — 'Customer Onboarding', not 'the Onboarding Team' or 'Salesforce'. Decompose to no more than two or three levels and keep the set collectively exhaustive within the scope in hand. For each capability record the accountable owner, a maturity rating on a stated scale with the evidence behind it, the systems and data that support it, and its strategic importance. Heat-map the result so that high-importance, low-maturity capabilities stand out — those are where investment is justified. Keep the map stable against reorganisation: if renaming a department would change your map, you have mapped structure rather than capability."
+}

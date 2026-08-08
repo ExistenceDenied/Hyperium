@@ -1,0 +1,180 @@
+# ADR-002 – Bounded Contexts
+
+## Status
+
+Accepted
+
+## Context
+
+Hyperium is an Operating System for Professional Services.
+
+To keep the platform maintainable and scalable, the domain is divided into bounded contexts.
+
+Each bounded context owns its own concepts, business rules and services.
+
+Dependencies between contexts should be minimized.
+
+---
+
+> ## AMENDED
+>
+> Amended by [ADR-006](ADR-006-plan-owns-its-governance.md) §8.
+>
+> **Methodologies is its own bounded context** (`core/methodologies/`), not
+> part of Knowledge. It owns Methodology, Stage, DeliverableTemplate,
+> ActivityTemplate, Technique and QualityGate — authored data, immutable at
+> runtime, depended on by Planning.
+>
+> Knowledge retains lessons learned, patterns and reusable examples: the
+> things extracted *from* an engagement, rather than the methodology that
+> directs one. This document conflated the two.
+>
+> Also stale in this document: **`LLMService` no longer exists** (deleted with
+> `services/` under [ADR-004](ADR-004-execution-model.md); the port is
+> `core/interfaces/llm_provider.LLMProvider`), and **"Work Items"** is retired
+> vocabulary — the unit of work is an **Activity**.
+>
+> The context boundaries and the dependency rule are otherwise unchanged, and
+> `tests/test_architecture.py` now enforces them.
+
+
+# Bounded Contexts
+
+## Missions
+
+Responsible for defining business objectives.
+
+Owns:
+
+- Mission
+- Objective
+- Stakeholder
+- Constraint
+- Success Criterion
+
+A Mission describes **what** should be achieved.
+
+It never describes **how**.
+
+---
+
+## Analysis
+
+Responsible for understanding a mission.
+
+Owns:
+
+- MissionAnalysisService
+- AnalysisResult
+- Prompt Builders
+- Result Parsers
+
+Analysis determines:
+
+- domain
+- assumptions
+- risks
+- disciplines
+- recommended deliverables
+
+Analysis never creates execution plans.
+
+---
+
+## Planning
+
+Responsible for translating analysis into executable work.
+
+Owns:
+
+- Execution Strategy
+- Project
+- Work Items
+- Dependencies
+- Scheduling
+
+Planning decides **how** the mission should be executed.
+
+---
+
+## Execution
+
+Responsible for performing work.
+
+Owns:
+
+- Agents
+- Human Resources
+- AI Resources
+- External Tools
+
+Execution never determines business goals.
+
+---
+
+## Knowledge
+
+Responsible for capturing reusable knowledge.
+
+Owns:
+
+- Lessons Learned
+- Templates
+- Methodologies
+- Best Practices
+- Knowledge Graph
+
+Knowledge continuously improves future missions.
+
+---
+
+## AI Infrastructure
+
+Responsible for interacting with AI providers.
+
+Owns:
+
+- LLMService
+- Provider implementations
+- Prompt execution
+- Structured output
+
+This context knows nothing about consulting.
+
+It only knows how to communicate with AI models.
+
+---
+
+# Dependency Rules
+
+Missions
+↓
+
+Analysis
+↓
+
+Planning
+↓
+
+Execution
+↓
+
+Knowledge
+
+AI Infrastructure is a supporting context and may be used by Analysis, Planning and Execution.
+
+Business contexts must never depend directly on AI providers.
+
+---
+
+# Guiding Principles
+
+Business before Technology.
+
+Understand before Planning.
+
+Planning before Execution.
+
+Knowledge after Execution.
+
+AI is an implementation detail.

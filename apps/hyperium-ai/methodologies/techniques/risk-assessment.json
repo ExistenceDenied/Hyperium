@@ -1,0 +1,7 @@
+{
+  "key": "risk-assessment",
+  "name": "Risk Assessment",
+  "description": "Identification, scoring and treatment of the threats to an initiative's outcome, recorded so that ownership is unambiguous and exposure can be tracked over time.",
+  "capabilities": ["BUSINESS_ANALYSIS", "ARCHITECTURE", "RESEARCH"],
+  "guidance": "Write each risk as cause, event and consequence — 'because X, Y may happen, resulting in Z' — so that the mitigation has something concrete to attack. Score probability and impact on a stated scale, derive an exposure rating, and name a single owner and a review date for every entry; risks owned by 'the team' are not owned. For each risk state the treatment as avoid, reduce, transfer or accept, list the specific mitigating actions with dates, and record the residual rating after mitigation. Separate risks from issues and from assumptions, and cover the categories that get missed: dependency, data quality, capability and capacity, adoption and change resistance, regulatory, and third-party. Present the register as a table ranked by exposure, and follow it with a short narrative on the two or three risks that could stop the engagement outright."
+}

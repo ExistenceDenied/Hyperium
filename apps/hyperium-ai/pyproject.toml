@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hyperium"
+version = "0.2.0"
+description = "An AI Consultancy Operating System."
+requires-python = ">=3.11"
+dependencies = [
+    "ollama>=0.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+# Browser-driven checks of the web interface. Kept separate from `dev` because
+# it pulls a browser down: the unit suite must stay runnable without it, and
+# CI installs only `dev`.
+ui = [
+    "playwright>=1.40",
+]
+# Native deliverable formats (Word, PowerPoint). Optional because a run and the
+# unit suite do not need them: without the extra, export falls back to Markdown.
+office = [
+    "python-docx>=1.1",
+    "python-pptx>=0.6",
+    "openpyxl>=3.1",
+]
+# The Claude API backend. Optional: Hyperium defaults to local Ollama, and the
+# SDK is imported lazily, so the unit suite and an Ollama-only run never need it.
+# Install with `pip install -e .[anthropic]` to run HYPERIUM_LLM_PROVIDER=anthropic.
+anthropic = [
+    "anthropic>=0.40",
+]
+
+[project.scripts]
+hyperium = "interfaces.cli:main"
+
+# The repo is a flat layout with data/runtime dirs (methodologies, templates,
+# logs, workspace) alongside the source. List the real packages explicitly so
+# setuptools does not try to auto-discover and fail on the non-package dirs.
+[tool.setuptools.packages.find]
+include = ["core*", "application*", "infrastructure*", "interfaces*", "config*"]
+
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

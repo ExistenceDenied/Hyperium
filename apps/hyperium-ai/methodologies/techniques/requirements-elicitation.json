@@ -1,0 +1,7 @@
+{
+  "key": "requirements-elicitation",
+  "name": "Requirements Elicitation",
+  "description": "Drawing out what the business actually needs — as distinct from what it first asks for — and recording it as discrete, testable, traceable requirement statements.",
+  "capabilities": ["REQUIREMENTS_ENGINEERING", "BUSINESS_ANALYSIS"],
+  "guidance": "Separate the stated want from the underlying need: for every request, record the business outcome it serves, so that a requirement can later be challenged on value rather than on preference. Write each requirement as a single atomic statement in the form 'The solution shall …', give it a unique identifier, a priority using MoSCoW, a source stakeholder, and a rationale. Cover functional behaviour, data, interfaces, and the non-functional dimensions that matter here — performance, availability, security, accessibility, compliance, retention — quantifying each rather than saying 'fast' or 'secure'. Record assumptions, constraints and explicit out-of-scope items alongside the requirements, because the boundary is as important as the content. Reject requirements that bundle several needs into one sentence, that describe a solution rather than a need, or that cannot be verified; where information is genuinely missing, log it as an open question with an owner instead of guessing."
+}

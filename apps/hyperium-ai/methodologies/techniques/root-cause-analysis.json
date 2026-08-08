@@ -1,0 +1,7 @@
+{
+  "key": "root-cause-analysis",
+  "name": "Root Cause Analysis",
+  "description": "Tracing an observed problem back past its symptoms to the underlying causes that, if removed, would stop the problem recurring.",
+  "capabilities": ["BUSINESS_ANALYSIS", "RESEARCH"],
+  "guidance": "State the problem precisely first — what happens, where, how often, and at what cost — because a vague problem statement produces a vague cause. Work the causes systematically using five-whys chains for linear problems and an Ishikawa breakdown across people, process, systems, data, policy and environment for tangled ones, and show the chain of reasoning rather than only the conclusion. Distinguish symptoms, contributing factors and root causes explicitly, and validate each candidate root cause against evidence: if removing it would not have prevented the observed problem, it is not a root cause. Rank causes by how much of the observed effect they explain, and note where evidence is missing rather than asserting a cause you cannot support. Keep the analysis blameless and structural — 'the operator made a mistake' is a symptom of a process that permitted the mistake."
+}

@@ -1,0 +1,7 @@
+{
+  "key": "user-story-writing",
+  "name": "User Story Writing",
+  "description": "Expressing requirements as small, independently valuable slices of behaviour written from the perspective of the person who benefits from them.",
+  "capabilities": ["REQUIREMENTS_ENGINEERING", "BUSINESS_ANALYSIS"],
+  "guidance": "Write each story as 'As a <specific role>, I want <capability> so that <business benefit>', using the real role from the stakeholder analysis rather than 'user'. Keep stories vertically sliced so each delivers observable value on its own, and test every story against INVEST — independent, negotiable, valuable, estimable, small, testable — splitting any story that fails on size by workflow step, business rule variation, or data variation rather than by technical layer. Group the stories into epics that map back to the requirement identifiers they satisfy, and give each story a priority and a note on the assumptions it rests on. State the 'so that' clause in business terms; if the benefit cannot be articulated, the story is a candidate for deletion. Do not write technical tasks as stories, and do not restate the same need at three levels of abstraction."
+}

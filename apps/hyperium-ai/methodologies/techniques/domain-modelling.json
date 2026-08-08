@@ -1,0 +1,7 @@
+{
+  "key": "domain-modelling",
+  "name": "Domain Modelling",
+  "description": "Building a shared model of the entities, relationships, rules and lifecycle of the business domain, expressed in the language the business itself uses.",
+  "capabilities": ["ARCHITECTURE", "SOFTWARE_DEVELOPMENT"],
+  "guidance": "Identify the core entities, their attributes, their identity, and the relationships between them with explicit cardinality, and define each term once in a glossary so the same word is not used for two things. Mark the aggregate boundaries and the invariants that must hold within each, and describe the lifecycle of the significant entities as states and the transitions permitted between them. Capture the business rules as statements attached to the entity or transition they constrain, and note where a rule is currently enforced by convention rather than by the system. Express the model as a text entity list plus a Mermaid class or ER diagram, and keep it in the ubiquitous language of the business rather than in database or framework terms. Do not model implementation concerns — tables, indexes, DTOs — and do not smooth over a genuine ambiguity in the domain; surface it as an open question for the business to resolve."
+}

@@ -1,0 +1,271 @@
+{
+  "key": "process-improvement",
+  "name": "Process Improvement",
+  "description": "A measured improvement engagement: baseline the process as it actually runs, diagnose why it underperforms, redesign it against the causes, and sequence the change into an adoptable roadmap with owned benefits.",
+  "version": "1.0",
+  "discipline": "Business Process Management",
+  "principles": [
+    "Measure before you change; without a baseline there is no improvement, only movement.",
+    "Model the process as it is actually performed, not as the procedure says it is.",
+    "Attack causes, not symptoms — a redesign that leaves the cause in place will decay back.",
+    "The people who run the process know where it breaks; engage them, do not survey them.",
+    "Every benefit has an owner, a measure and a date, or it is not a benefit.",
+    "Sequence change for adoption capacity, not just for logical dependency."
+  ],
+  "stages": [
+    {
+      "key": "baseline",
+      "name": "Baseline",
+      "description": "Establish what the process is, who runs it, and how it currently performs, with evidence rather than assertion.",
+      "depends_on": [],
+      "quality_gate": {
+        "description": "Baseline is complete when the process boundaries are agreed, the as-is flow is modelled including exceptions, and current performance is quantified with the source of each figure stated.",
+        "require_approval": true,
+        "minimum_words": 300,
+        "required_sections": ["Scope"]
+      },
+      "deliverables": [
+        {
+          "key": "process-baseline",
+          "name": "Process Baseline",
+          "description": "The current process end to end, with its measured performance.",
+          "sections": [
+            "Scope and boundaries",
+            "As-is process",
+            "Baseline measures",
+            "Observed pain points"
+          ],
+          "activities": [
+            {
+              "key": "scope-the-process",
+              "name": "Scope the process",
+              "description": "Fix the triggering event, the terminating outcome, the in-scope actors and systems, and what is explicitly excluded from the improvement.",
+              "capabilities": ["BUSINESS_ANALYSIS"],
+              "technique": "process-modelling",
+              "depends_on": []
+            },
+            {
+              "key": "map-as-is-process",
+              "name": "Map the as-is process",
+              "description": "Model the process in swimlanes with every handoff, decision point, exception path and workaround, noting where practice diverges from procedure.",
+              "capabilities": ["BUSINESS_ANALYSIS"],
+              "technique": "process-modelling",
+              "depends_on": ["scope-the-process"]
+            },
+            {
+              "key": "establish-baseline-measures",
+              "name": "Establish baseline measures",
+              "description": "Quantify current performance — cycle time, touch time, volume, rework rate, error rate, unit cost — per step, stating for each figure whether it is measured, estimated or assumed.",
+              "capabilities": ["BUSINESS_ANALYSIS", "RESEARCH"],
+              "technique": "gap-analysis",
+              "depends_on": ["map-as-is-process"]
+            }
+          ]
+        },
+        {
+          "key": "process-context",
+          "name": "Process Context",
+          "description": "Who owns and runs the process, and the constraints any redesign must respect.",
+          "sections": [
+            "Scope recap",
+            "Stakeholders and process owners",
+            "Operating context",
+            "Constraints"
+          ],
+          "activities": [
+            {
+              "key": "map-process-stakeholders",
+              "name": "Map process stakeholders",
+              "description": "Identify the process owner, the performers, the downstream consumers and the governance parties, with influence, interest and stance on change recorded.",
+              "capabilities": ["BUSINESS_ANALYSIS", "RESEARCH"],
+              "technique": "stakeholder-mapping",
+              "depends_on": ["scope-the-process"]
+            },
+            {
+              "key": "capture-operating-constraints",
+              "name": "Capture operating constraints",
+              "description": "Record the regulatory, contractual, system, data and capability constraints that bound any redesign, with the evidence and owner for each.",
+              "capabilities": ["BUSINESS_ANALYSIS", "RESEARCH"],
+              "technique": "capability-mapping",
+              "depends_on": ["map-process-stakeholders"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "diagnose",
+      "name": "Diagnose",
+      "description": "Explain the measured underperformance: where the gaps are, what causes them, and which are worth attacking.",
+      "depends_on": ["baseline"],
+      "quality_gate": {
+        "description": "Diagnosis is complete when performance gaps are sized against agreed targets, root causes are evidenced rather than asserted, and opportunities are ranked by impact and feasibility.",
+        "require_approval": true,
+        "minimum_words": 300,
+        "required_sections": ["Root cause"]
+      },
+      "deliverables": [
+        {
+          "key": "diagnostic-report",
+          "name": "Diagnostic Report",
+          "description": "The gap between current and required performance, the causes behind it, and the prioritised opportunities to close it.",
+          "sections": [
+            "Performance gaps",
+            "Root cause analysis",
+            "Waste and bottlenecks",
+            "Prioritised opportunities"
+          ],
+          "activities": [
+            {
+              "key": "analyse-performance-gaps",
+              "name": "Analyse performance gaps",
+              "description": "Compare baseline measures against agreed or proposed targets, size each gap in its own unit, and rank the gaps by business impact.",
+              "capabilities": ["BUSINESS_ANALYSIS"],
+              "technique": "gap-analysis",
+              "depends_on": ["establish-baseline-measures"]
+            },
+            {
+              "key": "identify-root-causes",
+              "name": "Identify root causes",
+              "description": "Trace the priority gaps to their structural causes across people, process, systems, data and policy, distinguishing symptoms from contributing factors from root causes.",
+              "capabilities": ["BUSINESS_ANALYSIS", "RESEARCH"],
+              "technique": "root-cause-analysis",
+              "depends_on": ["analyse-performance-gaps", "capture-operating-constraints"]
+            },
+            {
+              "key": "prioritise-opportunities",
+              "name": "Prioritise improvement opportunities",
+              "description": "Convert the validated causes into candidate improvements and rank them by benefit, effort, risk and how much of the measured gap each would close.",
+              "capabilities": ["BUSINESS_ANALYSIS"],
+              "technique": "gap-analysis",
+              "depends_on": ["identify-root-causes"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "redesign",
+      "name": "Redesign",
+      "description": "Design the target process against the validated causes, having tested the alternatives, and assess what the change will cost in risk.",
+      "depends_on": ["diagnose"],
+      "quality_gate": {
+        "description": "Redesign is complete when the target process is modelled end to end, the rationale traces each change to a root cause, and the change risks are owned with treatments.",
+        "require_approval": true,
+        "minimum_words": 350,
+        "required_sections": ["Risks"]
+      },
+      "deliverables": [
+        {
+          "key": "target-process-design",
+          "name": "Target Process Design",
+          "description": "The redesigned process, why it takes this shape, and the risks it introduces.",
+          "sections": [
+            "Redesign options",
+            "Target process",
+            "Design rationale and controls",
+            "Risks"
+          ],
+          "activities": [
+            {
+              "key": "evaluate-redesign-options",
+              "name": "Evaluate redesign options",
+              "description": "Set out at least three distinct redesign approaches plus the do-nothing baseline, scored against weighted criteria drawn from the diagnosis and the constraints.",
+              "capabilities": ["BUSINESS_ANALYSIS", "ARCHITECTURE"],
+              "technique": "solution-options-analysis",
+              "depends_on": ["prioritise-opportunities"]
+            },
+            {
+              "key": "design-target-process",
+              "name": "Design the target process",
+              "description": "Model the to-be process in swimlanes with the removed handoffs, new controls and automated steps visible, and trace each change back to the root cause it addresses.",
+              "capabilities": ["BUSINESS_ANALYSIS"],
+              "technique": "process-modelling",
+              "depends_on": ["evaluate-redesign-options"]
+            },
+            {
+              "key": "assess-change-risks",
+              "name": "Assess change risks",
+              "description": "Produce a ranked register of the delivery, operational, compliance and adoption risks the redesign introduces, each with an owner, treatment and residual rating.",
+              "capabilities": ["BUSINESS_ANALYSIS"],
+              "technique": "risk-assessment",
+              "depends_on": ["design-target-process"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "roadmap",
+      "name": "Roadmap",
+      "description": "Sequence the change into adoptable phases, attach owned and measurable benefits, and plan how the organisation moves to the new way of working.",
+      "depends_on": ["redesign"],
+      "quality_gate": {
+        "description": "The roadmap is complete when phases are sequenced with dependencies and exit criteria, every benefit has an owner, measure and date, and the adoption approach is defined.",
+        "require_approval": true,
+        "minimum_words": 300,
+        "required_sections": ["Benefits"]
+      },
+      "deliverables": [
+        {
+          "key": "improvement-roadmap",
+          "name": "Improvement Roadmap",
+          "description": "The phased path from the current process to the target one, and the benefits each phase releases.",
+          "sections": [
+            "Roadmap phases",
+            "Sequencing and dependencies",
+            "Benefits and measures",
+            "Risks and mitigations"
+          ],
+          "activities": [
+            {
+              "key": "sequence-implementation-phases",
+              "name": "Sequence the implementation phases",
+              "description": "Break the change into phases that each end in an operable improvement, with entry dependencies, exit criteria, duration ranges and the capacity each assumes.",
+              "capabilities": ["BUSINESS_ANALYSIS", "ARCHITECTURE"],
+              "technique": "implementation-roadmap",
+              "depends_on": ["assess-change-risks"]
+            },
+            {
+              "key": "define-benefits-and-measures",
+              "name": "Define benefits and measures",
+              "description": "Attach to each phase the benefits it releases, classified as cash-releasing, cost-avoiding or non-financial, each with an owner, a measure, a baseline and a realisation date.",
+              "capabilities": ["BUSINESS_ANALYSIS", "TECHNICAL_WRITING"],
+              "technique": "business-case",
+              "depends_on": ["sequence-implementation-phases"]
+            }
+          ]
+        },
+        {
+          "key": "adoption-plan",
+          "name": "Change and Adoption Plan",
+          "description": "How the people who run the process are brought to the new way of working, and how the gains are held.",
+          "sections": [
+            "Adoption approach",
+            "Stakeholder engagement",
+            "Benefits sustainment",
+            "Governance and review"
+          ],
+          "activities": [
+            {
+              "key": "plan-stakeholder-adoption",
+              "name": "Plan stakeholder adoption",
+              "description": "Set out the engagement, training, communication and support needed per stakeholder group, with owners and timing keyed to the roadmap phases.",
+              "capabilities": ["BUSINESS_ANALYSIS", "TECHNICAL_WRITING"],
+              "technique": "stakeholder-mapping",
+              "depends_on": ["define-benefits-and-measures"]
+            },
+            {
+              "key": "define-sustainment-governance",
+              "name": "Define sustainment governance",
+              "description": "Define who owns the process after handover, which measures are monitored at what cadence, and the trigger conditions for corrective action if performance regresses.",
+              "capabilities": ["BUSINESS_ANALYSIS"],
+              "technique": "implementation-roadmap",
+              "depends_on": ["plan-stakeholder-adoption"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

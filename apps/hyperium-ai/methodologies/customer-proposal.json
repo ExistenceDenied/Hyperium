@@ -1,0 +1,45 @@
+{
+  "key": "customer-proposal",
+  "name": "Customer Proposal",
+  "description": "Turn a job enquiry into a polished proposal or quote a customer will say yes to: what you understand they need, what you will deliver, when, for how much, and on what terms. The mission carries the enquiry and the pricing; the methodology gives it a professional shape.",
+  "version": "1.0",
+  "discipline": "Sales",
+  "principles": [
+    "Lead with the customer's problem, not your business.",
+    "Be specific: real scope, real dates, real prices.",
+    "Make the price easy to understand and the next step easy to take.",
+    "Never promise what you cannot deliver."
+  ],
+  "stages": [
+    {
+      "key": "prepare",
+      "name": "Prepare the proposal",
+      "description": "Understand the job and write a proposal the customer can accept.",
+      "depends_on": [],
+      "quality_gate": {
+        "description": "The proposal states what will be delivered, a clear price, and a single next step.",
+        "require_approval": true,
+        "minimum_words": 150,
+        "required_sections": ["Next step"]
+      },
+      "deliverables": [
+        {
+          "key": "proposal",
+          "name": "Proposal",
+          "description": "A client-ready proposal or quote.",
+          "sections": ["Your situation", "What we will deliver", "Timeline", "Investment", "Terms", "Next step"],
+          "format": "docx",
+          "activities": [
+            {
+              "key": "write-proposal",
+              "name": "Write the proposal",
+              "description": "From the enquiry, write a persuasive, specific proposal: what you understand the customer needs, the scope and deliverables, a realistic timeline, a clear price, plain terms, and one easy next step. Where a price or detail was not provided, leave a clearly marked blank for the owner rather than inventing it.",
+              "capabilities": ["COPYWRITING", "BUSINESS_ANALYSIS"],
+              "depends_on": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
