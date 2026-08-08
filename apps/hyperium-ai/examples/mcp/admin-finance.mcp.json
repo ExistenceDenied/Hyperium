@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "admin-finance": {
+      "command": "node",
+      "args": ["C:\\AI\\hyperium\\apps\\admin-finance\\mcp\\server.mjs"],
+      "env": { "ADMIN_FINANCE_API": "http://127.0.0.1:8930" }
+    }
+  }
+}
