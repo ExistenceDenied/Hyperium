@@ -118,10 +118,19 @@ export function ublInvoice(invoice: Invoice, customer: Customer, company: Compan
   </cac:AccountingSupplierParty>
   <cac:AccountingCustomerParty>${party(customer.company, customer.vatNumber, customer.addressLines)}
   </cac:AccountingCustomerParty>
+  <cac:Delivery>
+    <cbc:ActualDeliveryDate>${x(invoice.date)}</cbc:ActualDeliveryDate>
+  </cac:Delivery>
   <cac:PaymentMeans>
     <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>
     <cbc:PaymentID>${x(invoice.structuredReference)}</cbc:PaymentID>
-    <cac:PayeeFinancialAccount><cbc:ID>${x(normVat(company.iban))}</cbc:ID></cac:PayeeFinancialAccount>
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>${x(normVat(company.iban))}</cbc:ID>${
+        normVat(company.bic)
+          ? `\n      <cac:FinancialInstitutionBranch><cbc:ID>${x(normVat(company.bic))}</cbc:ID></cac:FinancialInstitutionBranch>`
+          : ''
+      }
+    </cac:PayeeFinancialAccount>
   </cac:PaymentMeans>
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="EUR">${money(totals.vatAmount)}</cbc:TaxAmount>

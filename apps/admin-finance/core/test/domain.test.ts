@@ -361,15 +361,18 @@ test('ublInvoice renders a Peppol-shaped UBL invoice with the right totals', () 
     standardVatRatePct: 21,
     createdAt: '2026-07-31T00:00:00Z',
   })
-  const xml = ublInvoice(inv, customer, company)
+  const xml = ublInvoice(inv, customer, { ...company, iban: 'BE68539007547034', bic: 'KREDBEBB' })
   assert.ok(xml.startsWith('<?xml'))
   assert.match(xml, /<Invoice[\s>]/)
   assert.ok(xml.includes('urn:cen.eu:en16931')) // Peppol BIS 3.0 customization
   assert.ok(xml.includes(`<cbc:ID>${inv.number}</cbc:ID>`))
   assert.ok(xml.includes('<cbc:IssueDate>2026-07-31</cbc:IssueDate>'))
+  assert.ok(xml.includes('<cbc:ActualDeliveryDate>2026-07-31</cbc:ActualDeliveryDate>')) // delivery = invoice date
   assert.ok(xml.includes('<cbc:Percent>21</cbc:Percent>'))
   assert.ok(xml.includes('<cbc:TaxInclusiveAmount currencyID="EUR">3448.50</cbc:TaxInclusiveAmount>'))
   assert.ok(xml.includes('<cbc:PayableAmount currencyID="EUR">3448.50</cbc:PayableAmount>'))
   assert.ok(xml.includes(`<cbc:PaymentID>${inv.structuredReference}</cbc:PaymentID>`))
+  assert.ok(xml.includes('<cbc:ID>BE68539007547034</cbc:ID>')) // IBAN
+  assert.ok(xml.includes('<cac:FinancialInstitutionBranch><cbc:ID>KREDBEBB</cbc:ID></cac:FinancialInstitutionBranch>')) // BIC
   assert.ok(xml.includes('<cac:InvoiceLine>'))
 })
