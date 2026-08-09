@@ -23,18 +23,21 @@ interface Family {
 // The faces the documents actually use (keeps each .docx to ~0.8 MB rather than embedding all weights).
 const FAMILIES: Family[] = [
   {
-    name: 'IBM Plex Sans',
+    name: 'Inter',
     family: 'swiss',
     files: [
-      { file: 'IBMPlexSans-Regular.ttf', style: 'Regular' },
-      { file: 'IBMPlexSans-Bold.ttf', style: 'Bold' },
-      { file: 'IBMPlexSans-Italic.ttf', style: 'Italic' },
+      { file: 'Inter-Regular.ttf', style: 'Regular' },
+      { file: 'Inter-SemiBold.ttf', style: 'Bold' },
+      { file: 'Inter-Italic.ttf', style: 'Italic' },
     ],
   },
   {
-    name: 'IBM Plex Serif',
-    family: 'roman',
-    files: [{ file: 'IBMPlexSerif-SemiBold.ttf', style: 'Bold' }],
+    name: 'Inter Medium',
+    family: 'swiss',
+    files: [
+      { file: 'Inter-Medium.ttf', style: 'Regular' },
+      { file: 'Inter-SemiBold.ttf', style: 'Bold' },
+    ],
   },
 ]
 
@@ -52,7 +55,7 @@ function obfuscate(data: Buffer, guid: string): Buffer {
 const NS_W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const NS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 
-/** Embed the IBM Plex faces into a .docx so it renders without the fonts installed. */
+/** Embed the Inter faces into a .docx so it renders without the fonts installed. */
 export async function embedFonts(docxBytes: Uint8Array): Promise<Uint8Array> {
   const zip = await JSZip.loadAsync(docxBytes)
 

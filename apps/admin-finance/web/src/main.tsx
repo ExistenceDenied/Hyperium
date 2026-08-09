@@ -12,6 +12,11 @@ import Invoices from './pages/Invoices'
 import Expenses from './pages/Expenses'
 import Archive from './pages/Archive'
 import Settings from './pages/Settings'
+// Inter — the Hyperium corporate typeface (SIL OFL). Regular (body), Medium
+// (labels/UI), SemiBold (titles/headings). Arial/sans-serif is the fallback.
+import '@fontsource/inter/400.css'
+import '@fontsource/inter/500.css'
+import '@fontsource/inter/600.css'
 import './index.css'
 
 const router = createBrowserRouter([

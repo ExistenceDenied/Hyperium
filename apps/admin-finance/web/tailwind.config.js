@@ -23,7 +23,9 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'Segoe UI', 'Roboto', 'sans-serif'],
+        // Inter is the Hyperium corporate typeface; Arial/sans-serif is the
+        // technical fallback only.
+        sans: ['Inter', 'Arial', 'sans-serif'],
       },
       keyframes: {
         'slide-in-left': { from: { transform: 'translateX(-100%)' }, to: { transform: 'translateX(0)' } },

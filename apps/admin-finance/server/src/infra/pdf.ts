@@ -18,21 +18,23 @@ import {
 } from '@af/core'
 import type { Customer, DocumentGenerator, ExpenseNote, Invoice, Settings, Timesheet } from '@af/core'
 
-// House typeface — IBM Plex (SIL OFL), embedded into every PDF via pdfkit font subsetting.
-// Plex Sans is the workhorse; Plex Serif gives the wordmark and titles their gravitas.
+// Inter — the Hyperium corporate typeface (SIL OFL), embedded into every PDF via
+// pdfkit font subsetting so output is identical on every machine and in CI.
+// 'Inter' bold = SemiBold (titles / headings / KPIs); 'InterMedium' = the label
+// & UI weight; Inter Regular = body. Arial/sans is only a non-embedded fallback.
 const FONTS = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'fonts')
 const printer = new PdfPrinter({
-  Plex: {
-    normal: resolve(FONTS, 'IBMPlexSans-Regular.ttf'),
-    bold: resolve(FONTS, 'IBMPlexSans-Bold.ttf'),
-    italics: resolve(FONTS, 'IBMPlexSans-Italic.ttf'),
-    bolditalics: resolve(FONTS, 'IBMPlexSans-BoldItalic.ttf'),
+  Inter: {
+    normal: resolve(FONTS, 'Inter-Regular.ttf'),
+    bold: resolve(FONTS, 'Inter-SemiBold.ttf'),
+    italics: resolve(FONTS, 'Inter-Italic.ttf'),
+    bolditalics: resolve(FONTS, 'Inter-SemiBoldItalic.ttf'),
   },
-  PlexSerif: {
-    normal: resolve(FONTS, 'IBMPlexSerif-Regular.ttf'),
-    bold: resolve(FONTS, 'IBMPlexSerif-SemiBold.ttf'), // SemiBold reads more refined at display sizes
-    italics: resolve(FONTS, 'IBMPlexSerif-Regular.ttf'),
-    bolditalics: resolve(FONTS, 'IBMPlexSerif-SemiBold.ttf'),
+  InterMedium: {
+    normal: resolve(FONTS, 'Inter-Medium.ttf'),
+    bold: resolve(FONTS, 'Inter-SemiBold.ttf'),
+    italics: resolve(FONTS, 'Inter-MediumItalic.ttf'),
+    bolditalics: resolve(FONTS, 'Inter-SemiBoldItalic.ttf'),
   },
 })
 
@@ -60,8 +62,8 @@ const hAccent = (width = 46, top = 12, bottom = 0): Content => ({
 
 const sectionLabel = (t: string, top = 20): Content => ({
   text: t.toUpperCase(),
+  font: 'InterMedium',
   color: NAVY,
-  bold: true,
   fontSize: 8.5,
   characterSpacing: 1.4,
   margin: [0, top, 0, 8],
@@ -69,8 +71,8 @@ const sectionLabel = (t: string, top = 20): Content => ({
 
 const th = (text: string, align: 'left' | 'right' | 'center' = 'left'): Content => ({
   text: text.toUpperCase(),
+  font: 'InterMedium',
   fontSize: 8,
-  bold: true,
   color: '#FFFFFF',
   characterSpacing: 0.6,
   alignment: align,
@@ -111,7 +113,7 @@ function masthead(s: Settings): Content[] {
       {
         width: '*',
         stack: [
-          { text: (c.name || 'Company').toUpperCase(), font: 'Plex', color: NAVY, bold: true, fontSize: 15, characterSpacing: 2.6 },
+          { text: (c.name || 'Company').toUpperCase(), font: 'Inter', color: NAVY, bold: true, fontSize: 15, characterSpacing: 2.6 },
           ...(addr ? [{ text: addr, fontSize: 8, color: MUTED, margin: [0, 4, 0, 0] } as Content] : []),
           ...(c.vatNumber ? [{ text: `VAT ${c.vatNumber}`, fontSize: 8, color: MUTED, margin: [0, 1, 0, 0] } as Content] : []),
         ],
@@ -124,7 +126,7 @@ function masthead(s: Settings): Content[] {
 
 function titleBlock(title: string, subtitle?: string, meta?: [string, string][]): Content {
   const metaRows: TableCell[][] = (meta ?? []).map(([l, v]): TableCell[] => [
-    { text: l.toUpperCase(), fontSize: 7, color: MUTED, characterSpacing: 0.6, alignment: 'right', margin: [0, 0, 14, 5] },
+    { text: l.toUpperCase(), font: 'InterMedium', fontSize: 7, color: MUTED, characterSpacing: 0.6, alignment: 'right', margin: [0, 0, 14, 5] },
     { text: v, fontSize: 9.5, color: INK, alignment: 'right', margin: [0, 0, 0, 5] },
   ])
   const block: Content = {
@@ -132,7 +134,7 @@ function titleBlock(title: string, subtitle?: string, meta?: [string, string][])
       {
         width: '*',
         stack: [
-          { text: title, font: 'Plex', fontSize: 26, bold: true, color: NAVY, characterSpacing: 0.2 },
+          { text: title, font: 'Inter', fontSize: 26, bold: true, color: NAVY, characterSpacing: 0.2 },
           ...(subtitle ? [{ text: subtitle, fontSize: 11, color: MUTED, margin: [0, 4, 0, 0] } as Content] : []),
         ],
       },
@@ -149,7 +151,7 @@ function kpiStrip(items: { label: string; value: string; sub?: string }[]): Cont
   const cells: TableCell[] = items.map(
     (it): TableCell => ({
       stack: [
-        { text: it.label.toUpperCase(), fontSize: 7, color: MUTED, characterSpacing: 0.9 },
+        { text: it.label.toUpperCase(), font: 'InterMedium', fontSize: 7, color: MUTED, characterSpacing: 0.9 },
         { text: it.value, fontSize: 15, bold: true, color: NAVY, margin: [0, 4, 0, 0] },
         ...(it.sub ? [{ text: it.sub, fontSize: 7.5, color: MUTED, margin: [0, 2, 0, 0] } as Content] : []),
       ],
@@ -247,7 +249,7 @@ function buildDoc(content: Content[], s: Settings): TDocumentDefinitions {
   return {
     pageSize: 'A4',
     pageMargins: [56, 56, 56, 76],
-    defaultStyle: { font: 'Plex', fontSize: 9, color: INK, lineHeight: 1.32 },
+    defaultStyle: { font: 'Inter', fontSize: 9, color: INK, lineHeight: 1.32 },
     content,
     footer: (cp: number, pc: number) => pageFooter(s, cp, pc),
   }

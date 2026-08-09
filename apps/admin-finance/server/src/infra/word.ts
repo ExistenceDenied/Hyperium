@@ -30,10 +30,11 @@ import {
 import type { Customer, DocumentGenerator, ExpenseNote, Invoice, Settings, Timesheet } from '@af/core'
 import { embedFonts } from './embedFonts.js'
 
-// ---- Design tokens ----------------------------------------------------------
-const NAVY = '0A2540'
+// ---- Design tokens (Hyperium brand) -----------------------------------------
+const NAVY = '101828' // Midnight Navy
+const ELECTRIC = '2563EB' // Electric Blue accent
 const INK = '1A2230'
-const MUTED = '8792A6'
+const MUTED = '475467' // Slate
 const HAIR = 'E2E7EF'
 
 const NO = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }
@@ -41,11 +42,12 @@ const HAIRLINE = { style: BorderStyle.SINGLE, size: 4, color: HAIR }
 const NAVYLINE = { style: BorderStyle.SINGLE, size: 10, color: NAVY }
 const NO_BORDERS = { top: NO, bottom: NO, left: NO, right: NO, insideHorizontal: NO, insideVertical: NO }
 
-// House typeface — IBM Plex. The generated .docx references these families; on a
-// machine with the (free, OFL) fonts installed it matches the PDF exactly, and
-// falls back gracefully otherwise. The PDF embeds the fonts outright.
-const SANS = 'IBM Plex Sans'
-const SERIF = 'IBM Plex Serif'
+// Inter — the Hyperium corporate typeface (SIL OFL), embedded into every .docx
+// (see embedFonts) so it renders identically without the fonts installed; Arial
+// is only a non-embedded fallback. 'Inter' bold = SemiBold (titles/headings);
+// 'Inter Medium' is the label/UI weight.
+const SANS = 'Inter'
+const MEDIUM = 'Inter Medium'
 
 // ---- Text primitives (sizes are half-points) --------------------------------
 const t = (
@@ -67,7 +69,7 @@ const muted = (text: string, size = 16) => new Paragraph({ children: [t(text, { 
 const sectionLabel = (text: string) =>
   new Paragraph({
     spacing: { before: 320, after: 120 },
-    children: [t(text, { caps: true, bold: true, color: NAVY, size: 17 })],
+    children: [t(text, { caps: true, color: NAVY, size: 17, font: MEDIUM })],
   })
 
 const spacer = (h = 120) => new Paragraph({ spacing: { after: h }, children: [] })
@@ -99,7 +101,7 @@ const cellText = (text: string, o: { right?: boolean; bold?: boolean; color?: st
 const cellHead = (text: string, right?: boolean) =>
   new Paragraph({
     alignment: right ? AlignmentType.RIGHT : AlignmentType.LEFT,
-    children: [t(text, { caps: true, bold: true, color: MUTED, size: 13 })],
+    children: [t(text, { caps: true, color: MUTED, size: 13, font: MEDIUM })],
   })
 
 interface Col {
@@ -138,7 +140,7 @@ function masthead(s: Settings): (Paragraph | Table)[] {
         children: [
           tc(
             [
-              new Paragraph({ children: [t(c.name || 'Company', { bold: true, color: NAVY, size: 30, font: SERIF })] }),
+              new Paragraph({ children: [t(c.name || 'Company', { bold: true, color: NAVY, size: 30, caps: true })] }),
               ...(c.addressLines.length ? [muted(c.addressLines.join('  ·  '))] : []),
               ...(c.vatNumber ? [muted(`VAT ${c.vatNumber}`)] : []),
             ],
@@ -157,7 +159,7 @@ function masthead(s: Settings): (Paragraph | Table)[] {
 
 function titleBlock(title: string, subtitle?: string): Paragraph[] {
   return [
-    new Paragraph({ spacing: { before: 160, after: subtitle ? 20 : 120 }, children: [t(title, { bold: true, color: NAVY, size: 48, font: SERIF })] }),
+    new Paragraph({ spacing: { before: 160, after: subtitle ? 20 : 120 }, children: [t(title, { bold: true, color: NAVY, size: 48 })] }),
     ...(subtitle ? [new Paragraph({ spacing: { after: 120 }, children: [t(subtitle, { color: MUTED, size: 22 })] })] : []),
   ]
 }
@@ -342,7 +344,7 @@ function invoiceChildren(inv: Invoice, s: Settings, customers: Customer[]): (Par
     ...(mention ? [new Paragraph({ spacing: { before: 200 }, children: [t(mention, { italics: true, color: MUTED, size: 15 })] })] : []),
     sectionLabel('Payment'),
     new Paragraph({ children: [t(`IBAN  ${s.company.iban || '—'}${s.company.bic ? `      BIC  ${s.company.bic}` : ''}`, { size: 18 })] }),
-    new Paragraph({ spacing: { before: 40 }, children: [t(`Structured reference  ${inv.structuredReference}`, { bold: true, color: NAVY, size: 18 })] }),
+    new Paragraph({ spacing: { before: 40 }, children: [t(`Structured reference  ${inv.structuredReference}`, { bold: true, color: ELECTRIC, size: 18 })] }),
     new Paragraph({ spacing: { before: 40 }, children: [t(`Please pay by ${inv.dueDate}.`, { color: MUTED, size: 16 })] }),
     ...(inv.notes ? [muted(inv.notes, 16)] : []),
   ]
