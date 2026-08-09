@@ -176,6 +176,19 @@ const handlers = {
 
   finance_rename_document: ({ id, title }) =>
     api('PATCH', `/api/archive/${encodeURIComponent(id)}`, { title }),
+
+  // ---------- EXPORT ----------
+  finance_export_accounting: async ({ period, outputDir }) => {
+    const qs = period ? `?period=${encodeURIComponent(period)}` : ''
+    const rep = await api('GET', `/api/exports/accounting${qs}`)
+    if (outputDir) {
+      await mkdir(outputDir, { recursive: true })
+      const dest = join(outputDir, rep.filename)
+      await writeFile(dest, rep.content, 'utf8')
+      return { path: dest, filename: rep.filename, invoiceCount: rep.invoiceCount }
+    }
+    return rep
+  },
 }
 
 // ---- tool catalog advertised to the agent ----
@@ -208,6 +221,7 @@ const TOOLS = [
   { name: 'finance_add_comment', description: 'Add a to-do comment to a timesheet, invoice or expense. Appended — existing comments are kept.', inputSchema: obj({ kind: { ...S.string, enum: ['timesheet', 'invoice', 'expense'] }, id: S.string, text: S.string }, ['kind', 'id', 'text']), annotations: writes('Add comment') },
   { name: 'finance_download_document', description: 'Copy a generated archive document into a directory the agent controls (e.g. its task workspace), so it can be delivered or attached. Creates the directory if needed and returns the written file path.', inputSchema: obj({ id: { ...S.string, description: 'Archive document id (from finance_generate_document / finance_list_archive).' }, outputDir: { ...S.string, description: 'Absolute directory to write the file into.' } }, ['id', 'outputDir']), annotations: writes('Download document to a folder') },
   { name: 'finance_rename_document', description: 'Rename an archived document\'s display title. The file on disk is unchanged — only the archive title. Empty titles are rejected.', inputSchema: obj({ id: S.string, title: S.string }, ['id', 'title']), annotations: writes('Rename document title') },
+  { name: 'finance_export_accounting', description: 'Export invoices as a generic, import-mappable accounting CSV (a sales journal) for the owner to import into Exact/Yuki/Odoo. Optionally filter by period (YYYY-MM). With outputDir, writes the .csv there and returns its path; otherwise returns the CSV content. Produces a LOCAL file only — it never pushes to any accounting system.', inputSchema: obj({ period: { ...S.string, description: 'Optional period filter YYYY-MM; omit for all invoices.' }, outputDir: { ...S.string, description: 'Optional absolute directory to write the .csv into.' } }, []), annotations: writes('Export accounting CSV') },
 ]
 
 // ---- JSON-RPC dispatch ----

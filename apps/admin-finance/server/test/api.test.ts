@@ -231,6 +231,45 @@ test('GET /api/archive/:id/path returns an absolute path rooted in AF_DATA_DIR',
   await api('DELETE', `/api/archive/${docId}`)
 })
 
+// ---- accounting export (a local CSV, filterable by period) -------------------
+test('GET /api/exports/accounting returns an invoice CSV, filterable by period', async () => {
+  const cust = await api('POST', '/api/customers', {
+    id: 'exp-c1',
+    company: 'Export Test NV',
+    addressLines: ['Teststraat 1'],
+    defaultDayRate: 500,
+    defaultHourlyRate: 60,
+    paymentTermsDays: 30,
+    vatTreatment: 'standard',
+  })
+  assert.equal(cust.status, 200)
+  const inv = await api('POST', '/api/invoices', {
+    customerId: 'exp-c1',
+    date: '2031-05-10',
+    extraLines: [{ description: 'Advisory', quantity: 1, unit: 'day', unitPrice: 500 }],
+  })
+  assert.equal(inv.status, 200)
+  const number = inv.body.number
+
+  const all = await api('GET', '/api/exports/accounting')
+  assert.equal(all.status, 200)
+  assert.ok(all.body.content.startsWith('InvoiceNumber,'), 'has a header row')
+  assert.ok(all.body.content.includes(number), 'includes the invoice')
+  assert.ok(all.body.content.includes('Export Test NV'), 'resolves the customer name')
+  assert.ok(all.body.content.includes('500.00'), 'includes the net amount')
+  assert.ok(all.body.invoiceCount >= 1)
+
+  // Period filter keys off the invoice date (2031-05-10).
+  const may = await api('GET', '/api/exports/accounting?period=2031-05')
+  assert.ok(may.body.content.includes(number))
+  const jun = await api('GET', '/api/exports/accounting?period=2031-06')
+  assert.ok(!jun.body.content.includes(number))
+  assert.equal(jun.body.filename, 'accounting-export-2031-06.csv')
+
+  const bad = await api('GET', '/api/exports/accounting?period=nonsense')
+  assert.ok(bad.status >= 400, 'a malformed period is rejected')
+})
+
 // ---- customer CRUD (must never disturb the invoice counter) -----------------
 test('customer create / update / delete leave nextInvoiceSeq untouched', async () => {
   // Advance the counter first so we can prove customer writes don't rewind it.

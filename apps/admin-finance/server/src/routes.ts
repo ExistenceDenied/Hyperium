@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import {
+  accountingCsv,
   buildInvoice,
   CommentSchema,
   currentPeriod,
@@ -203,6 +204,23 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const expenseNote = await expenseRepo.getByPeriodKey(key)
     const invoices = (await invoiceRepo.list()).filter((inv) => inv.date.slice(0, 7) === key)
     return monthlyDashboard({ period, timesheet, invoices, expenseNote })
+  })
+
+  // ---- Accounting export ----------------------------------------------------
+  // Returns a generic, import-mappable CSV of invoices (a sales journal) as a
+  // LOCAL file the owner imports into Exact/Yuki/Odoo. It never pushes anywhere
+  // and needs no credentials — read-only over the data.
+  const ExportQuery = z.object({ period: z.string().regex(/^\d{4}-\d{2}$/).optional() })
+  app.get('/api/exports/accounting', async (req) => {
+    const { period } = ExportQuery.parse(req.query ?? {})
+    const customers = await customerRepo.list()
+    let invoices = await invoiceRepo.list()
+    if (period) invoices = invoices.filter((i) => i.date.startsWith(period))
+    return {
+      filename: `accounting-export-${period ?? 'all'}.csv`,
+      invoiceCount: invoices.length,
+      content: accountingCsv(invoices, customers),
+    }
   })
 
   // ---- Archive + document generation ---------------------------------------

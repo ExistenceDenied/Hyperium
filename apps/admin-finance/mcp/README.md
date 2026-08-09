@@ -59,4 +59,6 @@ Workflow / deliver (held at the approval gate): `finance_set_status`
 (draft → in_progress → ready → final), `finance_add_comment`,
 `finance_download_document` (copy an archived file into a folder the agent
 controls, e.g. its task workspace), `finance_rename_document` (rename an
-archived document's display title).
+archived document's display title), `finance_export_accounting` (export invoices
+as a generic accounting CSV to import into Exact/Yuki/Odoo — a local file, never
+pushed).
