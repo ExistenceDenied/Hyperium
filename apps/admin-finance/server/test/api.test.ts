@@ -326,6 +326,30 @@ test('GET /api/exports/quarter/:q bundles invoices, expenses, CSV and a VAT summ
   assert.ok(bad.statusCode >= 400)
 })
 
+// ---- CODA bank reconciliation -----------------------------------------------
+test('POST /api/reconcile parses a CODA statement into a reconciliation report', async () => {
+  const codaLine = (o: { sign: 'credit' | 'debit'; amount: number; date: string; free?: string }) => {
+    const amt = String(Math.round(o.amount * 1000)).padStart(15, '0')
+    const comm = (o.free ?? '').padEnd(53, ' ')
+    const head = '21' + '0000' + '0000' + ' '.repeat(21)
+    return (head + (o.sign === 'debit' ? '1' : '0') + amt + o.date + '00000000' + '0' + comm).padEnd(128, ' ')
+  }
+  const coda = [
+    codaLine({ sign: 'credit', amount: 750, date: '100826', free: 'UNMATCHED INCOME' }),
+    codaLine({ sign: 'debit', amount: 42, date: '110826', free: 'SNACKS' }),
+  ].join('\r\n')
+
+  const res = await api('POST', '/api/reconcile', { coda })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.movementCount, 2)
+  assert.ok(Array.isArray(res.body.unexplainedCredits))
+  assert.equal(res.body.totals.credits, 750)
+  assert.equal(res.body.totals.debits, 42)
+
+  const bad = await api('POST', '/api/reconcile', { coda: 'not a coda file at all' })
+  assert.equal(bad.status, 400)
+})
+
 // ---- customer CRUD (must never disturb the invoice counter) -----------------
 test('customer create / update / delete leave nextInvoiceSeq untouched', async () => {
   // Advance the counter first so we can prove customer writes don't rewind it.

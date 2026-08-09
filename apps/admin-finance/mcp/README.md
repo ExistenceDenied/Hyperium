@@ -62,4 +62,6 @@ controls, e.g. its task workspace), `finance_rename_document` (rename an
 archived document's display title), `finance_export_accounting` (export invoices
 as a generic accounting CSV to import into Exact/Yuki/Odoo — a local file, never
 pushed), `finance_prepare_quarter_package` (bundle a quarter's invoice + expense
-PDFs, the accounting CSV and a VAT summary into one local ZIP for the accountant).
+PDFs, the accounting CSV and a VAT summary into one local ZIP for the accountant),
+`finance_reconcile` (match a CODA bank statement against invoices/expenses and
+flag anything without a supporting document — local, no bank connection).

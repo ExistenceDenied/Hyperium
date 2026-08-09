@@ -8,7 +8,9 @@ import {
   CustomerSchema,
   DocStatusSchema,
   monthlyDashboard,
+  parseCoda,
   parsePeriodKey,
+  reconcile,
   SettingsSchema,
   TimesheetSchema,
   ExpenseNoteSchema,
@@ -240,6 +242,23 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     reply.header('X-Invoice-Count', String(pkg.invoiceCount))
     reply.header('X-Expense-Count', String(pkg.expenseCount))
     return reply.send(pkg.bytes)
+  })
+
+  // ---- Bank reconciliation (CODA) ------------------------------------------
+  // Match a CODA bank statement against invoices (income, via the structured
+  // reference) and expense items (spending, by amount), and surface anything
+  // without a supporting document. The .cod content is parsed locally; no bank
+  // connection, no credentials, nothing sent anywhere.
+  const ReconcileBody = z.object({ coda: z.string().min(1) })
+  app.post('/api/reconcile', async (req, reply) => {
+    const { coda } = ReconcileBody.parse(req.body)
+    const movements = parseCoda(coda)
+    if (movements.length === 0) {
+      return reply.code(400).send({ error: 'no CODA movement records (2.1) found — is this a .cod file?' })
+    }
+    const invoices = await invoiceRepo.list()
+    const expenses = await expenseRepo.list()
+    return { movementCount: movements.length, ...reconcile(movements, invoices, expenses) }
   })
 
   // ---- Archive + document generation ---------------------------------------

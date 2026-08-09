@@ -24,10 +24,13 @@ import {
   buildInvoice,
   expenseTotals,
   monthlyDashboard,
+  parseCoda,
+  reconcile,
   type Company,
   type Customer,
   type Timesheet,
   type ExpenseNote,
+  type Invoice,
 } from '@af/core'
 
 // ---- money ------------------------------------------------------------------
@@ -287,4 +290,59 @@ test('monthlyDashboard aggregates revenue, VAT and a profit estimate', () => {
   assert.equal(d.expenses, 289)
   assert.equal(d.mileageReimbursement, 66.22)
   assert.equal(d.profitEstimate, 2494.78) // round2(2850 - 289 - 66.22)
+})
+
+// ---- CODA reconciliation ----------------------------------------------------
+const codaLine = (o: { sign: 'credit' | 'debit'; amount: number; date: string; ref?: string; free?: string }): string => {
+  const amt = String(Math.round(o.amount * 1000)).padStart(15, '0')
+  const comm = (o.ref ? '101' + o.ref : (o.free ?? '')).padEnd(53, ' ')
+  const head = '21' + '0000' + '0000' + ' '.repeat(21) // 31 chars, idx 0..30
+  return (head + (o.sign === 'debit' ? '1' : '0') + amt + o.date + '00000000' + (o.ref ? '1' : '0') + comm).padEnd(128, ' ')
+}
+
+test('parseCoda extracts sign, amount, value date and the structured reference', () => {
+  const [m] = parseCoda(codaLine({ sign: 'credit', amount: 3448.5, date: '150826', ref: '020260000178' }))
+  assert.equal(m!.sign, 'credit')
+  assert.equal(m!.amount, 3448.5)
+  assert.equal(m!.valueDate, '2026-08-15')
+  assert.equal(m!.structuredRef, '020260000178')
+  const [d] = parseCoda(codaLine({ sign: 'debit', amount: 12.5, date: '010126', free: 'COFFEE' }))
+  assert.equal(d!.sign, 'debit')
+  assert.equal(d!.structuredRef, undefined)
+})
+
+test('reconcile matches income by structured reference and flags the rest', () => {
+  const inv: Invoice = buildInvoice({
+    id: 'ri',
+    year: 2026,
+    seq: 1,
+    date: '2026-08-15',
+    company,
+    customer,
+    extraLines: [{ description: 'Advisory', quantity: 1, unit: 'day', unitPrice: 2850 }],
+    standardVatRatePct: 21,
+    createdAt: '2026-08-15T00:00:00Z',
+  })
+  const ref = inv.structuredReference.replace(/\D/g, '')
+  const expense = mkExpense() // one item: 289 + 50.15 VAT = 339.15 gross
+
+  const coda = [
+    codaLine({ sign: 'credit', amount: invoiceTotals(inv).total, date: '200826', ref }), // pays the invoice
+    codaLine({ sign: 'credit', amount: 500, date: '210826', free: 'GIFT' }), // income, no invoice
+    codaLine({ sign: 'debit', amount: 339.15, date: '050826', free: 'ACME' }), // matches an expense
+    codaLine({ sign: 'debit', amount: 999.99, date: '060826', free: 'MYSTERY' }), // spend, no receipt
+  ].join('\r\n')
+
+  const r = reconcile(parseCoda(coda), [inv], [expense])
+  assert.equal(r.totals.invoicesPaid, 1)
+  assert.equal(r.paidInvoices[0]!.number, inv.number)
+  assert.equal(r.paidInvoices[0]!.amountMatches, true)
+  assert.equal(r.unpaidInvoices.length, 0)
+  assert.equal(r.unexplainedCredits.length, 1)
+  assert.equal(r.unexplainedCredits[0]!.amount, 500)
+  assert.equal(r.totals.debitsMatched, 1)
+  assert.equal(r.unexplainedDebits.length, 1)
+  assert.equal(r.unexplainedDebits[0]!.amount, 999.99)
+  assert.equal(r.totals.credits, 3948.5) // 3448.5 + 500
+  assert.equal(r.totals.debits, 1339.14) // 339.15 + 999.99
 })
