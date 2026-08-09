@@ -58,4 +58,5 @@ Prepare / generate (held at the approval gate): `finance_get_or_create_timesheet
 Workflow / deliver (held at the approval gate): `finance_set_status`
 (draft → in_progress → ready → final), `finance_add_comment`,
 `finance_download_document` (copy an archived file into a folder the agent
-controls, e.g. its task workspace).
+controls, e.g. its task workspace), `finance_rename_document` (rename an
+archived document's display title).

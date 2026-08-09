@@ -81,6 +81,7 @@ approval gate (mutates local state or writes a file). Nothing is destructive.
 | `finance_set_status` | WORKFLOW | `PATCH /api/<kind>/:id/meta` | ❌ |
 | `finance_add_comment` | WORKFLOW | `PATCH /api/<kind>/:id/meta` | ❌ |
 | `finance_download_document` | DELIVER | `GET /api/archive/:id/download` → writes to a folder | ❌ |
+| `finance_rename_document` | ARCHIVE | `PATCH /api/archive/:id` (title only) | ❌ |
 
 Deliberately **excluded**: every `DELETE`, `PUT /api/settings` (company config is
 not agent scope), and anything resembling send/pay (none exists).

@@ -173,6 +173,9 @@ const handlers = {
     await writeFile(dest, bytes)
     return { path: dest, filename: meta.filename, sizeBytes: bytes.byteLength }
   },
+
+  finance_rename_document: ({ id, title }) =>
+    api('PATCH', `/api/archive/${encodeURIComponent(id)}`, { title }),
 }
 
 // ---- tool catalog advertised to the agent ----
@@ -204,6 +207,7 @@ const TOOLS = [
   { name: 'finance_set_status', description: 'Set the workflow status of a timesheet, invoice or expense: draft, in_progress, ready, or final.', inputSchema: obj({ kind: { ...S.string, enum: ['timesheet', 'invoice', 'expense'] }, id: S.string, status: { ...S.string, enum: ['draft', 'in_progress', 'ready', 'final'] } }, ['kind', 'id', 'status']), annotations: writes('Set workflow status') },
   { name: 'finance_add_comment', description: 'Add a to-do comment to a timesheet, invoice or expense. Appended — existing comments are kept.', inputSchema: obj({ kind: { ...S.string, enum: ['timesheet', 'invoice', 'expense'] }, id: S.string, text: S.string }, ['kind', 'id', 'text']), annotations: writes('Add comment') },
   { name: 'finance_download_document', description: 'Copy a generated archive document into a directory the agent controls (e.g. its task workspace), so it can be delivered or attached. Creates the directory if needed and returns the written file path.', inputSchema: obj({ id: { ...S.string, description: 'Archive document id (from finance_generate_document / finance_list_archive).' }, outputDir: { ...S.string, description: 'Absolute directory to write the file into.' } }, ['id', 'outputDir']), annotations: writes('Download document to a folder') },
+  { name: 'finance_rename_document', description: 'Rename an archived document\'s display title. The file on disk is unchanged — only the archive title. Empty titles are rejected.', inputSchema: obj({ id: S.string, title: S.string }, ['id', 'title']), annotations: writes('Rename document title') },
 ]
 
 // ---- JSON-RPC dispatch ----
