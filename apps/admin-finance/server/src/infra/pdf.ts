@@ -37,17 +37,24 @@ const printer = new PdfPrinter({
 })
 
 // ---- Design tokens ----------------------------------------------------------
-const NAVY = '#004B72' // Billit house blue — table headers, rules, accents
-const ORANGE = '#EF7D00' // Billit house orange — document titles
-const ZEBRA = '#F8F8F8' // alternating table row fill
-const INK = '#1A2230' // primary text
-const MUTED = '#8792A6' // secondary text
+// Hyperium brand palette
+const NAVY = '#101828' // Midnight Navy — wordmark, table headers, totals bar
+const ELECTRIC = '#2563EB' // Electric Blue — the signature H-Line accent + key figures
+const ZEBRA = '#F8FAFC' // Light Grey — alternating table rows
+const INK = '#1A2230' // primary body text
+const MUTED = '#475467' // Slate — secondary text
 const HAIR = '#E2E7EF' // hairline rules
 const CONTENT_W = 483 // A4 (595.28) minus 56pt margins each side
 
 // ---- Primitives -------------------------------------------------------------
 const hline = (color = HAIR, w = 0.5, top = 0, bottom = 0): Content => ({
   canvas: [{ type: 'line', x1: 0, y1: 0, x2: CONTENT_W, y2: 0, lineWidth: w, lineColor: color }],
+  margin: [0, top, 0, bottom],
+})
+
+// The signature Hyperium "H-Line": a short Electric-Blue accent rule.
+const hAccent = (width = 46, top = 12, bottom = 0): Content => ({
+  canvas: [{ type: 'line', x1: 0, y1: 0, x2: width, y2: 0, lineWidth: 2, lineColor: ELECTRIC }],
   margin: [0, top, 0, bottom],
 })
 
@@ -104,7 +111,7 @@ function masthead(s: Settings): Content[] {
       {
         width: '*',
         stack: [
-          { text: c.name || 'Company', font: 'Plex', color: NAVY, bold: true, fontSize: 15, characterSpacing: 0.4 },
+          { text: (c.name || 'Company').toUpperCase(), font: 'Plex', color: NAVY, bold: true, fontSize: 15, characterSpacing: 2.6 },
           ...(addr ? [{ text: addr, fontSize: 8, color: MUTED, margin: [0, 4, 0, 0] } as Content] : []),
           ...(c.vatNumber ? [{ text: `VAT ${c.vatNumber}`, fontSize: 8, color: MUTED, margin: [0, 1, 0, 0] } as Content] : []),
         ],
@@ -112,7 +119,7 @@ function masthead(s: Settings): Content[] {
       { width: 'auto', stack: right },
     ],
   }
-  return [head, hline(NAVY, 1, 12, 0)]
+  return [head, hAccent(46, 12, 0)]
 }
 
 function titleBlock(title: string, subtitle?: string, meta?: [string, string][]): Content {
@@ -125,7 +132,7 @@ function titleBlock(title: string, subtitle?: string, meta?: [string, string][])
       {
         width: '*',
         stack: [
-          { text: title, font: 'Plex', fontSize: 26, bold: true, color: ORANGE, characterSpacing: 0.2 },
+          { text: title, font: 'Plex', fontSize: 26, bold: true, color: NAVY, characterSpacing: 0.2 },
           ...(subtitle ? [{ text: subtitle, fontSize: 11, color: MUTED, margin: [0, 4, 0, 0] } as Content] : []),
         ],
       },
@@ -342,7 +349,7 @@ function invoiceContent(inv: Invoice, s: Settings, customers: Customer[]): Conte
           width: '*',
           stack: [
             { text: `IBAN  ${s.company.iban || '—'}${s.company.bic ? `      BIC  ${s.company.bic}` : ''}`, fontSize: 9, color: INK },
-            { text: `Structured reference  ${inv.structuredReference}`, fontSize: 9, bold: true, color: NAVY, margin: [0, 4, 0, 0] },
+            { text: `Structured reference  ${inv.structuredReference}`, fontSize: 9, bold: true, color: ELECTRIC, margin: [0, 4, 0, 0] },
             { text: `Please pay by ${inv.dueDate}.`, fontSize: 8, color: MUTED, margin: [0, 4, 0, 0] },
           ],
         },
