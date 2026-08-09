@@ -23,9 +23,23 @@ cd apps/hyperium-ai && start.bat
 cd apps/admin-finance && start-admin-finance.bat
 ```
 
+`start.bat` also has a **Both** option — start the finance API and the AI OS
+together, which phase C's agent-driven finance tools need.
+
 Each app is self-contained: its own dependencies, its own local data directory,
 its own config. Nothing is shared at runtime yet — this is **phase A** (see
 [the roadmap](docs/architecture/01-monorepo.md)).
+
+## Testing
+
+Run both suites from the root (mirrors CI):
+
+```bash
+pwsh ./test-all.ps1
+```
+
+CI runs the same on every push/PR to `main`
+([.github/workflows/ci.yml](.github/workflows/ci.yml)), on `windows-latest`.
 
 ## The non-negotiable rules
 

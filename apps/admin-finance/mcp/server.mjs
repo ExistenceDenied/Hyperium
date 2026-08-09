@@ -98,9 +98,19 @@ const handlers = {
   finance_get_or_create_timesheet: ({ period }) =>
     api('GET', `/api/timesheets/period/${encodeURIComponent(period)}`),
 
-  finance_set_timesheet_days: async ({ id, days }) => {
+  finance_set_timesheet_days: async ({ id, days, replace }) => {
     const current = await api('GET', `/api/timesheets/${encodeURIComponent(id)}`)
-    return api('PUT', `/api/timesheets/${encodeURIComponent(id)}`, { ...current, days })
+    let nextDays
+    if (replace) {
+      nextDays = days
+    } else {
+      // Merge by date: provided days upsert same-date entries; existing days on
+      // other dates are preserved (so sending one day never wipes the rest).
+      const byDate = new Map((current.days ?? []).map((d) => [d.date, d]))
+      for (const d of days) byDate.set(d.date, d)
+      nextDays = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
+    }
+    return api('PUT', `/api/timesheets/${encodeURIComponent(id)}`, { ...current, days: nextDays })
   },
 
   finance_get_or_create_expense: ({ period }) =>
@@ -161,7 +171,7 @@ const TOOLS = [
   { name: 'finance_locate_document', description: 'Resolve the absolute local file path of an archived generated document by id.', inputSchema: obj({ id: S.string }, ['id']), annotations: readOnly('Locate document') },
 
   { name: 'finance_get_or_create_timesheet', description: 'Get the timesheet for a period (YYYY-MM), creating a blank draft if none exists. Returns the timesheet including its id.', inputSchema: obj({ period: { ...S.string, description: 'Period key, YYYY-MM.' } }, ['period']), annotations: writes('Get or create timesheet') },
-  { name: 'finance_set_timesheet_days', description: 'Replace the days on a timesheet. Each day: {date (YYYY-MM-DD), billable (bool), hours (number), customerId?, project?, comment?}.', inputSchema: obj({ id: S.string, days: { type: 'array', items: obj({ date: S.string, billable: S.boolean, hours: S.number, customerId: S.string, project: S.string, comment: S.string }, ['date', 'billable', 'hours']) } }, ['id', 'days']), annotations: writes('Set timesheet days') },
+  { name: 'finance_set_timesheet_days', description: 'Add or update days on a timesheet. By default merges by date (provided days upsert same-date entries; other existing days are kept). Pass replace=true to overwrite the whole days list instead. Each day: {date (YYYY-MM-DD), billable (bool), hours (number), customerId?, project?, comment?}.', inputSchema: obj({ id: S.string, days: { type: 'array', items: obj({ date: S.string, billable: S.boolean, hours: S.number, customerId: S.string, project: S.string, comment: S.string }, ['date', 'billable', 'hours']) }, replace: { ...S.boolean, description: 'If true, replace all days instead of merging by date. Default false.' } }, ['id', 'days']), annotations: writes('Set timesheet days') },
   { name: 'finance_get_or_create_expense', description: 'Get the expense note for a period (YYYY-MM), creating a blank draft if none exists. Returns it including its id.', inputSchema: obj({ period: { ...S.string, description: 'Period key, YYYY-MM.' } }, ['period']), annotations: writes('Get or create expense note') },
   { name: 'finance_set_expense', description: 'Set the items and/or mileage trips on an expense note. Replaces each array you provide; omit an array to keep it. Item: {date (YYYY-MM-DD), category, description, supplier, amount, vatAmount, status?}. Trip: {date, departure, destination, purpose, distanceKm, roundTrip?, customerId?}.', inputSchema: obj({ id: S.string, items: { type: 'array', items: obj({ date: S.string, category: S.string, description: S.string, supplier: S.string, amount: S.number, vatAmount: S.number, status: { ...S.string, enum: ['draft', 'submitted', 'reimbursed'] } }, ['date', 'category', 'description', 'supplier', 'amount', 'vatAmount']) }, trips: { type: 'array', items: obj({ date: S.string, departure: S.string, destination: S.string, purpose: S.string, distanceKm: S.number, roundTrip: S.boolean, customerId: S.string }, ['date', 'departure', 'destination', 'purpose', 'distanceKm']) }, mileageRatePerKm: S.number }, ['id']), annotations: writes('Set expense items/trips') },
   { name: 'finance_upsert_customer', description: 'Create a customer (omit id) or update one (provide id). Fields: company, contactPerson?, addressLines[], vatNumber?, email?, defaultDayRate, defaultHourlyRate, paymentTermsDays, vatTreatment.', inputSchema: obj({ id: S.string, company: S.string, contactPerson: S.string, addressLines: { type: 'array', items: S.string }, vatNumber: S.string, email: S.string, defaultDayRate: S.number, defaultHourlyRate: S.number, paymentTermsDays: S.number, vatTreatment: { ...S.string, enum: ['standard', 'reverse_charge_eu', 'exempt', 'zero'] } }, ['company']), annotations: writes('Create/update customer') },

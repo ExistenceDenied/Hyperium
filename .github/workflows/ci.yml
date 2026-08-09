@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# These are Windows apps (start.bat, OneDrive-aware file handling), so CI runs
+# on windows-latest to match the environment they're developed and run in.
+jobs:
+  admin-finance:
+    name: admin-finance (TypeScript)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/admin-finance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/admin-finance/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  hyperium-ai:
+    name: hyperium-ai (Python)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/hyperium-ai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev,office]"
+      - run: pytest -q
