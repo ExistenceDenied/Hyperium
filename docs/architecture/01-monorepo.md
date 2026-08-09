@@ -30,12 +30,14 @@ hyperium/
 
 - Each app keeps its own dependencies, local data dir, config and ports.
 - Nothing is shared at runtime. The apps do not know about each other.
-- **Pulling upstream fixes** into an app after this point:
-  ```bash
-  git fetch admin-finance-src
-  git subtree pull --prefix=apps/admin-finance admin-finance-src main
-  ```
-  (and `hyperium-ai-src` / `feature/agentic-tasks` for the other).
+- **This umbrella is now canonical.** The two original repos were retired on
+  2026-08-09 (deleted, with dated tar.gz backups in
+  `OneDrive\Hyperium IP\_retired-repos\`), and their subtree remotes were
+  removed. There is no upstream to pull from anymore — edit each app in place
+  here. Note: `apps/hyperium-ai`'s last commit `967b6a7` was never pushed to its
+  old GitHub remote, so it survives only in this umbrella (pushed to `origin`)
+  and that tarball. Treat `origin` (github.com/ExistenceDenied/Hyperium) as the
+  single source of truth.
 
 ### Runtime data
 

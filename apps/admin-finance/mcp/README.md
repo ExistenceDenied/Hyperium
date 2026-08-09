@@ -48,5 +48,6 @@ Read (no approval): `finance_get_settings`, `finance_list_customers`,
 `finance_get_invoice`, `finance_list_archive`, `finance_locate_document`.
 
 Prepare / generate (held at the approval gate): `finance_get_or_create_timesheet`,
-`finance_set_timesheet_days`, `finance_upsert_customer`, `finance_prepare_invoice`,
-`finance_update_invoice`, `finance_generate_document`.
+`finance_set_timesheet_days`, `finance_get_or_create_expense`, `finance_set_expense`,
+`finance_upsert_customer`, `finance_prepare_invoice`, `finance_update_invoice`,
+`finance_generate_document`.

@@ -72,6 +72,8 @@ approval gate (mutates local state or writes a file). Nothing is destructive.
 | `finance_locate_document` | READ | (resolve archive relPath → abs path) | ✅ |
 | `finance_get_or_create_timesheet` | PREPARE | `GET /api/timesheets/period/:key` | ❌ |
 | `finance_set_timesheet_days` | PREPARE | `PUT /api/timesheets/:id` | ❌ |
+| `finance_get_or_create_expense` | PREPARE | `GET /api/expenses/period/:key` | ❌ |
+| `finance_set_expense` | PREPARE | `PUT /api/expenses/:id` | ❌ |
 | `finance_upsert_customer` | PREPARE | `POST`/`PUT /api/customers` | ❌ |
 | `finance_prepare_invoice` | PREPARE | `POST /api/invoices` | ❌ |
 | `finance_update_invoice` | PREPARE | `PUT /api/invoices/:id` (identity locked server-side) | ❌ |

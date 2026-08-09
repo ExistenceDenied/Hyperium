@@ -103,6 +103,22 @@ const handlers = {
     return api('PUT', `/api/timesheets/${encodeURIComponent(id)}`, { ...current, days })
   },
 
+  finance_get_or_create_expense: ({ period }) =>
+    api('GET', `/api/expenses/period/${encodeURIComponent(period)}`),
+
+  finance_set_expense: async ({ id, items, trips, mileageRatePerKm }) => {
+    const current = await api('GET', `/api/expenses/${encodeURIComponent(id)}`)
+    // Each item/trip needs an id (the web UI mints them client-side); default
+    // an item's status to 'draft'. id is applied last so it always wins.
+    const withIds = (arr, defaults) =>
+      (arr ?? []).map((x) => ({ ...defaults, ...x, id: x.id || randomUUID() }))
+    const next = { ...current }
+    if (items !== undefined) next.items = withIds(items, { status: 'draft' })
+    if (trips !== undefined) next.trips = withIds(trips, { roundTrip: false })
+    if (mileageRatePerKm !== undefined) next.mileageRatePerKm = mileageRatePerKm
+    return api('PUT', `/api/expenses/${encodeURIComponent(id)}`, next)
+  },
+
   finance_upsert_customer: ({ id, ...customer }) => {
     // The API validates a full Customer (id included); the web UI mints the id
     // client-side, so we do the same when creating.
@@ -146,6 +162,8 @@ const TOOLS = [
 
   { name: 'finance_get_or_create_timesheet', description: 'Get the timesheet for a period (YYYY-MM), creating a blank draft if none exists. Returns the timesheet including its id.', inputSchema: obj({ period: { ...S.string, description: 'Period key, YYYY-MM.' } }, ['period']), annotations: writes('Get or create timesheet') },
   { name: 'finance_set_timesheet_days', description: 'Replace the days on a timesheet. Each day: {date (YYYY-MM-DD), billable (bool), hours (number), customerId?, project?, comment?}.', inputSchema: obj({ id: S.string, days: { type: 'array', items: obj({ date: S.string, billable: S.boolean, hours: S.number, customerId: S.string, project: S.string, comment: S.string }, ['date', 'billable', 'hours']) } }, ['id', 'days']), annotations: writes('Set timesheet days') },
+  { name: 'finance_get_or_create_expense', description: 'Get the expense note for a period (YYYY-MM), creating a blank draft if none exists. Returns it including its id.', inputSchema: obj({ period: { ...S.string, description: 'Period key, YYYY-MM.' } }, ['period']), annotations: writes('Get or create expense note') },
+  { name: 'finance_set_expense', description: 'Set the items and/or mileage trips on an expense note. Replaces each array you provide; omit an array to keep it. Item: {date (YYYY-MM-DD), category, description, supplier, amount, vatAmount, status?}. Trip: {date, departure, destination, purpose, distanceKm, roundTrip?, customerId?}.', inputSchema: obj({ id: S.string, items: { type: 'array', items: obj({ date: S.string, category: S.string, description: S.string, supplier: S.string, amount: S.number, vatAmount: S.number, status: { ...S.string, enum: ['draft', 'submitted', 'reimbursed'] } }, ['date', 'category', 'description', 'supplier', 'amount', 'vatAmount']) }, trips: { type: 'array', items: obj({ date: S.string, departure: S.string, destination: S.string, purpose: S.string, distanceKm: S.number, roundTrip: S.boolean, customerId: S.string }, ['date', 'departure', 'destination', 'purpose', 'distanceKm']) }, mileageRatePerKm: S.number }, ['id']), annotations: writes('Set expense items/trips') },
   { name: 'finance_upsert_customer', description: 'Create a customer (omit id) or update one (provide id). Fields: company, contactPerson?, addressLines[], vatNumber?, email?, defaultDayRate, defaultHourlyRate, paymentTermsDays, vatTreatment.', inputSchema: obj({ id: S.string, company: S.string, contactPerson: S.string, addressLines: { type: 'array', items: S.string }, vatNumber: S.string, email: S.string, defaultDayRate: S.number, defaultHourlyRate: S.number, paymentTermsDays: S.number, vatTreatment: { ...S.string, enum: ['standard', 'reverse_charge_eu', 'exempt', 'zero'] } }, ['company']), annotations: writes('Create/update customer') },
   { name: 'finance_prepare_invoice', description: 'Prepare a DRAFT invoice. Bill a timesheet by day/hour (give timesheetId + basis) and/or add extraLines. Assigns a legal invoice number + Belgian structured reference but sends nothing.', inputSchema: obj({ customerId: S.string, date: { ...S.string, description: 'Invoice date YYYY-MM-DD.' }, timesheetId: S.string, basis: { ...S.string, enum: ['day', 'hour'] }, vatTreatment: { ...S.string, enum: ['standard', 'reverse_charge_eu', 'exempt', 'zero'] }, paymentTermsDays: S.number, reference: S.string, notes: S.string, extraLines: { type: 'array', items: obj({ description: S.string, quantity: S.number, unit: S.string, unitPrice: S.number }, ['description', 'quantity', 'unit', 'unitPrice']) } }, ['customerId', 'date']), annotations: writes('Prepare draft invoice') },
   { name: 'finance_update_invoice', description: 'Update fields on an existing invoice draft (e.g. lines, notes, dueDate). Legal identity (number/seq/year/reference) is locked server-side and cannot change.', inputSchema: obj({ id: S.string, notes: S.string, reference: S.string, dueDate: S.string, lines: { type: 'array', items: obj({ description: S.string, quantity: S.number, unit: S.string, unitPrice: S.number }, ['description', 'quantity', 'unit', 'unitPrice']) } }, ['id']), annotations: writes('Update invoice draft') },

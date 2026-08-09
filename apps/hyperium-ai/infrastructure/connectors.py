@@ -109,13 +109,22 @@ PRESETS: dict[str, ConnectorPreset] = {
         "ever prepares and generates — it never sends invoices, moves money, or "
         "touches credentials.",
         command="node",
-        # Absolute path: this connector lives in the sibling app of the umbrella
-        # monorepo (assumes the umbrella at C:\\AI\\hyperium). The bridge talks to
+        # The path to the bridge is a wizard field, not baked in here — it is
+        # machine-specific and would otherwise be committed. The bridge talks to
         # the running Admin & Finance API, so that app must be started first.
-        args=[r"C:\AI\hyperium\apps\admin-finance\mcp\server.mjs"],
+        args=[],
         setup="Requires Node.js and the Admin & Finance app running "
         "(start-admin-finance.bat). Preparing/generating a document is held for "
         "your approval; there is no send/pay capability to expose.",
+        fields=[
+            ConnectorField(
+                key="server_path",
+                label="Path to the Admin & Finance MCP server (server.mjs)",
+                kind="path",
+                target="arg",
+                placeholder=r"C:\AI\hyperium\apps\admin-finance\mcp\server.mjs",
+            )
+        ],
         auth="none",
     ),
     "xero": ConnectorPreset(
