@@ -54,3 +54,8 @@ Prepare / generate (held at the approval gate): `finance_get_or_create_timesheet
 `finance_set_timesheet_days`, `finance_get_or_create_expense`, `finance_set_expense`,
 `finance_upsert_customer`, `finance_prepare_invoice`, `finance_update_invoice`,
 `finance_generate_document`.
+
+Workflow / deliver (held at the approval gate): `finance_set_status`
+(draft → in_progress → ready → final), `finance_add_comment`,
+`finance_download_document` (copy an archived file into a folder the agent
+controls, e.g. its task workspace).

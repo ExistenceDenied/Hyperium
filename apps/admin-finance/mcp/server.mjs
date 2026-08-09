@@ -15,11 +15,14 @@
 // Requires the admin-finance API running (default http://127.0.0.1:8930).
 
 import { randomUUID } from 'node:crypto'
+import { writeFile, mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
 
 const PROTOCOL_VERSION = '2024-11-05'
 const SERVER_INFO = { name: 'admin-finance', version: '0.1.0' }
 
 const API = (process.env.ADMIN_FINANCE_API ?? 'http://127.0.0.1:8930').replace(/\/+$/, '')
+const COLL = { timesheet: 'timesheets', invoice: 'invoices', expense: 'expenses' }
 
 // ---- stdio plumbing (stdout carries ONLY JSON-RPC; diagnostics go to stderr) ----
 process.stdin.setEncoding('utf-8')
@@ -140,6 +143,36 @@ const handlers = {
     const { absolutePath } = await api('GET', `/api/archive/${encodeURIComponent(doc.id)}/path`)
     return { ...doc, absolutePath }
   },
+
+  // ---------- WORKFLOW ----------
+  finance_set_status: ({ kind, id, status }) =>
+    api('PATCH', `/api/${COLL[kind]}/${encodeURIComponent(id)}/meta`, { status }),
+
+  finance_add_comment: async ({ kind, id, text }) => {
+    const coll = COLL[kind]
+    const entity = await api('GET', `/api/${coll}/${encodeURIComponent(id)}`)
+    const comment = { id: randomUUID(), text, done: false, createdAt: new Date().toISOString() }
+    return api('PATCH', `/api/${coll}/${encodeURIComponent(id)}/meta`, {
+      comments: [...(entity.comments ?? []), comment],
+    })
+  },
+
+  // ---------- DELIVER ----------
+  finance_download_document: async ({ id, outputDir }) => {
+    const meta = await api('GET', `/api/archive/${encodeURIComponent(id)}/path`)
+    let res
+    try {
+      res = await fetch(`${API}/api/archive/${encodeURIComponent(id)}/download`)
+    } catch (err) {
+      throw new Error(`admin-finance API not reachable at ${API} (${err?.message ?? err}).`)
+    }
+    if (!res.ok) throw new Error(`download ${id} → ${res.status}`)
+    const bytes = Buffer.from(await res.arrayBuffer())
+    await mkdir(outputDir, { recursive: true })
+    const dest = join(outputDir, meta.filename)
+    await writeFile(dest, bytes)
+    return { path: dest, filename: meta.filename, sizeBytes: bytes.byteLength }
+  },
 }
 
 // ---- tool catalog advertised to the agent ----
@@ -167,6 +200,10 @@ const TOOLS = [
   { name: 'finance_update_invoice', description: 'Update fields on an existing invoice draft (e.g. lines, notes, dueDate). Legal identity (number/seq/year/reference) is locked server-side and cannot change.', inputSchema: obj({ id: S.string, notes: S.string, reference: S.string, dueDate: S.string, lines: { type: 'array', items: obj({ description: S.string, quantity: S.number, unit: S.string, unitPrice: S.number }, ['description', 'quantity', 'unit', 'unitPrice']) } }, ['id']), annotations: writes('Update invoice draft') },
 
   { name: 'finance_generate_document', description: 'Generate a PDF or Word document from a timesheet/invoice/expense. Writes a versioned file into the local archive and returns its metadata + absolute path.', inputSchema: obj({ kind: { ...S.string, enum: ['timesheet', 'invoice', 'expense'] }, refId: { ...S.string, description: 'Id of the timesheet/invoice/expense.' }, format: { ...S.string, enum: ['pdf', 'docx'] } }, ['kind', 'refId', 'format']), annotations: writes('Generate document') },
+
+  { name: 'finance_set_status', description: 'Set the workflow status of a timesheet, invoice or expense: draft, in_progress, ready, or final.', inputSchema: obj({ kind: { ...S.string, enum: ['timesheet', 'invoice', 'expense'] }, id: S.string, status: { ...S.string, enum: ['draft', 'in_progress', 'ready', 'final'] } }, ['kind', 'id', 'status']), annotations: writes('Set workflow status') },
+  { name: 'finance_add_comment', description: 'Add a to-do comment to a timesheet, invoice or expense. Appended — existing comments are kept.', inputSchema: obj({ kind: { ...S.string, enum: ['timesheet', 'invoice', 'expense'] }, id: S.string, text: S.string }, ['kind', 'id', 'text']), annotations: writes('Add comment') },
+  { name: 'finance_download_document', description: 'Copy a generated archive document into a directory the agent controls (e.g. its task workspace), so it can be delivered or attached. Creates the directory if needed and returns the written file path.', inputSchema: obj({ id: { ...S.string, description: 'Archive document id (from finance_generate_document / finance_list_archive).' }, outputDir: { ...S.string, description: 'Absolute directory to write the file into.' } }, ['id', 'outputDir']), annotations: writes('Download document to a folder') },
 ]
 
 // ---- JSON-RPC dispatch ----
