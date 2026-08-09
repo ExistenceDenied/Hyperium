@@ -83,6 +83,7 @@ approval gate (mutates local state or writes a file). Nothing is destructive.
 | `finance_download_document` | DELIVER | `GET /api/archive/:id/download` → writes to a folder | ❌ |
 | `finance_rename_document` | ARCHIVE | `PATCH /api/archive/:id` (title only) | ❌ |
 | `finance_export_accounting` | EXPORT | `GET /api/exports/accounting` → local CSV, never pushed | ❌ |
+| `finance_prepare_quarter_package` | EXPORT | `GET /api/exports/quarter/:q` → local ZIP for the accountant | ❌ |
 
 Deliberately **excluded**: every `DELETE`, `PUT /api/settings` (company config is
 not agent scope), and anything resembling send/pay (none exists).

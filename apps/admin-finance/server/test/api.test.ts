@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import JSZip from 'jszip'
 import type { FastifyInstance } from 'fastify'
 
 // The app is built AFTER AF_DATA_DIR is set, so every write lands in a throwaway
@@ -268,6 +269,61 @@ test('GET /api/exports/accounting returns an invoice CSV, filterable by period',
 
   const bad = await api('GET', '/api/exports/accounting?period=nonsense')
   assert.ok(bad.status >= 400, 'a malformed period is rejected')
+})
+
+// ---- quarter package for the accountant (one ZIP) ---------------------------
+test('GET /api/exports/quarter/:q bundles invoices, expenses, CSV and a VAT summary', async () => {
+  await api('POST', '/api/customers', {
+    id: 'q-c1',
+    company: 'Quarter Test NV',
+    addressLines: ['Teststraat 1'],
+    defaultDayRate: 1000,
+    defaultHourlyRate: 120,
+    paymentTermsDays: 30,
+    vatTreatment: 'standard',
+  })
+  const inv = await api('POST', '/api/invoices', {
+    customerId: 'q-c1',
+    date: '2032-08-15', // Q3
+    extraLines: [{ description: 'Advisory', quantity: 1, unit: 'day', unitPrice: 1000 }],
+  })
+  assert.equal(inv.status, 200)
+  const exp = await api('GET', '/api/expenses/period/2032-08')
+  await api('PUT', `/api/expenses/${exp.body.id}`, {
+    ...exp.body,
+    items: [
+      {
+        id: 'q-e1',
+        date: '2032-08-03',
+        category: 'Software',
+        description: 'Hosting',
+        supplier: 'Acme Cloud',
+        amount: 100,
+        vatAmount: 21,
+        status: 'draft',
+      },
+    ],
+  })
+
+  const res = await app.inject({ method: 'GET', url: '/api/exports/quarter/2032-Q3' })
+  assert.equal(res.statusCode, 200)
+  assert.ok(String(res.headers['content-type']).includes('zip'))
+  assert.equal(res.headers['x-invoice-count'], '1')
+  assert.equal(res.headers['x-expense-count'], '1')
+
+  const zip = await JSZip.loadAsync(res.rawPayload)
+  const names = Object.keys(zip.files)
+  assert.ok(names.some((n) => n.startsWith('invoices/') && n.endsWith('.pdf')), 'has an invoice PDF')
+  assert.ok(names.some((n) => n.startsWith('expenses/') && n.endsWith('.pdf')), 'has an expense PDF')
+  assert.ok(names.includes('accounting-2032-Q3.csv'), 'has the accounting CSV')
+  assert.ok(names.some((n) => n.startsWith('vat-summary-2032-Q3')), 'has the VAT summary')
+
+  const csv = await zip.file('accounting-2032-Q3.csv')!.async('string')
+  assert.ok(csv.includes(inv.body.number), 'the CSV lists the quarter invoice')
+
+  // a malformed quarter is rejected
+  const bad = await app.inject({ method: 'GET', url: '/api/exports/quarter/2032-Q9' })
+  assert.ok(bad.statusCode >= 400)
 })
 
 // ---- customer CRUD (must never disturb the invoice counter) -----------------

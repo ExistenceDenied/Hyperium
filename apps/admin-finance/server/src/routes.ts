@@ -29,6 +29,7 @@ import {
 } from './infra/repositories.js'
 import { documentStore } from './infra/documentStore.js'
 import { generateDocument } from './app/documents.js'
+import { buildQuarterPackage } from './app/quarter-package.js'
 
 const nowIso = () => new Date().toISOString()
 
@@ -221,6 +222,24 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       invoiceCount: invoices.length,
       content: accountingCsv(invoices, customers),
     }
+  })
+
+  // Everything an accountant needs for a quarter's VAT processing, as one ZIP
+  // (invoice + expense PDFs, the accounting CSV, and a VAT summary). Local file
+  // for hand-off — never sent anywhere.
+  app.get('/api/exports/quarter/:q', async (req, reply) => {
+    const { q } = req.params as { q: string }
+    let pkg
+    try {
+      pkg = await buildQuarterPackage(q)
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) })
+    }
+    reply.header('Content-Type', 'application/zip')
+    reply.header('Content-Disposition', `attachment; filename="${pkg.filename}"`)
+    reply.header('X-Invoice-Count', String(pkg.invoiceCount))
+    reply.header('X-Expense-Count', String(pkg.expenseCount))
+    return reply.send(pkg.bytes)
   })
 
   // ---- Archive + document generation ---------------------------------------

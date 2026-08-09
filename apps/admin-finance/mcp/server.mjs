@@ -189,6 +189,28 @@ const handlers = {
     }
     return rep
   },
+
+  finance_prepare_quarter_package: async ({ quarter, outputDir }) => {
+    let res
+    try {
+      res = await fetch(`${API}/api/exports/quarter/${encodeURIComponent(quarter)}`)
+    } catch (err) {
+      throw new Error(`admin-finance API not reachable at ${API} (${err?.message ?? err}).`)
+    }
+    if (!res.ok) throw new Error(`quarter package ${quarter} → ${res.status}: ${await res.text()}`)
+    const bytes = Buffer.from(await res.arrayBuffer())
+    const filename = `quarter-package-${quarter}.zip`
+    await mkdir(outputDir, { recursive: true })
+    const dest = join(outputDir, filename)
+    await writeFile(dest, bytes)
+    return {
+      path: dest,
+      filename,
+      sizeBytes: bytes.byteLength,
+      invoiceCount: Number(res.headers.get('x-invoice-count') ?? 0),
+      expenseCount: Number(res.headers.get('x-expense-count') ?? 0),
+    }
+  },
 }
 
 // ---- tool catalog advertised to the agent ----
@@ -222,6 +244,7 @@ const TOOLS = [
   { name: 'finance_download_document', description: 'Copy a generated archive document into a directory the agent controls (e.g. its task workspace), so it can be delivered or attached. Creates the directory if needed and returns the written file path.', inputSchema: obj({ id: { ...S.string, description: 'Archive document id (from finance_generate_document / finance_list_archive).' }, outputDir: { ...S.string, description: 'Absolute directory to write the file into.' } }, ['id', 'outputDir']), annotations: writes('Download document to a folder') },
   { name: 'finance_rename_document', description: 'Rename an archived document\'s display title. The file on disk is unchanged — only the archive title. Empty titles are rejected.', inputSchema: obj({ id: S.string, title: S.string }, ['id', 'title']), annotations: writes('Rename document title') },
   { name: 'finance_export_accounting', description: 'Export invoices as a generic, import-mappable accounting CSV (a sales journal) for the owner to import into Exact/Yuki/Odoo. Optionally filter by period (YYYY-MM). With outputDir, writes the .csv there and returns its path; otherwise returns the CSV content. Produces a LOCAL file only — it never pushes to any accounting system.', inputSchema: obj({ period: { ...S.string, description: 'Optional period filter YYYY-MM; omit for all invoices.' }, outputDir: { ...S.string, description: 'Optional absolute directory to write the .csv into.' } }, []), annotations: writes('Export accounting CSV') },
+  { name: 'finance_prepare_quarter_package', description: 'Bundle everything the accountant needs for a quarter\'s VAT processing into one local ZIP — every invoice + expense-note PDF, the accounting CSV, and a VAT summary — written into a folder the agent controls. A local hand-off file; it is never sent anywhere.', inputSchema: obj({ quarter: { ...S.string, description: 'Quarter, formatted YYYY-Qn (e.g. 2026-Q3).' }, outputDir: { ...S.string, description: 'Absolute directory to write the .zip into.' } }, ['quarter', 'outputDir']), annotations: writes('Prepare quarter package') },
 ]
 
 // ---- JSON-RPC dispatch ----
