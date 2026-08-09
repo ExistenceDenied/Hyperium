@@ -14,16 +14,12 @@
 // Launch (by hyperium-ai): node apps/admin-finance/mcp/server.mjs
 // Requires the admin-finance API running (default http://127.0.0.1:8930).
 
-import { fileURLToPath } from 'node:url'
-import { dirname, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 const PROTOCOL_VERSION = '2024-11-05'
 const SERVER_INFO = { name: 'admin-finance', version: '0.1.0' }
 
 const API = (process.env.ADMIN_FINANCE_API ?? 'http://127.0.0.1:8930').replace(/\/+$/, '')
-const HERE = dirname(fileURLToPath(import.meta.url))
-const DATA_DIR = process.env.ADMIN_FINANCE_DATA_DIR ?? resolve(HERE, '..', 'data')
 
 // ---- stdio plumbing (stdout carries ONLY JSON-RPC; diagnostics go to stderr) ----
 process.stdin.setEncoding('utf-8')
@@ -80,19 +76,10 @@ const handlers = {
   finance_list_invoices: () => api('GET', '/api/invoices'),
   finance_get_invoice: ({ id }) => api('GET', `/api/invoices/${encodeURIComponent(id)}`),
   finance_list_archive: () => api('GET', '/api/archive'),
-  finance_locate_document: async ({ id }) => {
-    const archive = await api('GET', '/api/archive')
-    const doc = Array.isArray(archive) ? archive.find((d) => d.id === id) : null
-    if (!doc) throw new Error(`No archived document with id ${id}.`)
-    return {
-      id: doc.id,
-      title: doc.title,
-      filename: doc.filename,
-      relPath: doc.relPath,
-      absolutePath: join(DATA_DIR, doc.relPath),
-      sizeBytes: doc.sizeBytes,
-    }
-  },
+  // The API resolves the absolute path from its own data dir — the source of
+  // truth — so there is no client-side path guessing to drift out of sync.
+  finance_locate_document: ({ id }) =>
+    api('GET', `/api/archive/${encodeURIComponent(id)}/path`),
 
   // ---------- PREPARE ----------
   finance_get_or_create_timesheet: ({ period }) =>
@@ -150,7 +137,8 @@ const handlers = {
   // ---------- GENERATE ----------
   finance_generate_document: async ({ kind, refId, format }) => {
     const doc = await api('POST', '/api/documents', { kind, refId, format })
-    return { ...doc, absolutePath: join(DATA_DIR, doc.relPath) }
+    const { absolutePath } = await api('GET', `/api/archive/${encodeURIComponent(doc.id)}/path`)
+    return { ...doc, absolutePath }
   },
 }
 

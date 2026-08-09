@@ -39,7 +39,10 @@ Or enable the **Admin & Finance** connector in the web wizard (it's a preset in
 | Env | Default | Meaning |
 |-----|---------|---------|
 | `ADMIN_FINANCE_API` | `http://127.0.0.1:8930` | Base URL of the running API |
-| `ADMIN_FINANCE_DATA_DIR` | `../data` (next to this app) | Where generated files live, for resolving absolute paths |
+
+Absolute file paths are resolved by the API itself (`GET /api/archive/:id/path`),
+which is the only component that knows its own data directory — the bridge never
+computes paths, so there is nothing to keep in sync.
 
 ## Tools
 

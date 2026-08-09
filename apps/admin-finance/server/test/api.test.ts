@@ -212,6 +212,25 @@ test('archive document lifecycle (generate -> rename -> download -> delete)', as
   assert.ok(!after.body.some((d: any) => d.id === docId))
 })
 
+// ---- the API resolves absolute paths against its OWN data dir ---------------
+test('GET /api/archive/:id/path returns an absolute path rooted in AF_DATA_DIR', async () => {
+  const gen = await api('POST', '/api/documents', { kind: 'invoice', refId: invId1, format: 'pdf' })
+  assert.equal(gen.status, 200)
+  const docId = gen.body.id
+
+  const path = await api('GET', `/api/archive/${docId}/path`)
+  assert.equal(path.status, 200)
+  assert.equal(path.body.relPath, gen.body.relPath)
+  // The path is rooted in THIS app's data dir — proving the API is the source of
+  // truth, so a client never has to know (or guess) the data directory.
+  assert.equal(path.body.absolutePath, join(dataDir, ...gen.body.relPath.split('/')))
+
+  const missing = await api('GET', '/api/archive/nope/path')
+  assert.equal(missing.status, 404)
+
+  await api('DELETE', `/api/archive/${docId}`)
+})
+
 // ---- customer CRUD (must never disturb the invoice counter) -----------------
 test('customer create / update / delete leave nextInvoiceSeq untouched', async () => {
   // Advance the counter first so we can prove customer writes don't rewind it.

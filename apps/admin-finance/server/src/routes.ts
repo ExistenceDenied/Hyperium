@@ -234,6 +234,20 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   }
   app.get('/api/archive/:id/download', download)
   app.get('/api/archive/:id/download/:filename', download)
+  // Resolve the absolute on-disk path of an archived file. The API is the only
+  // component that knows its own data directory (AF_DATA_DIR), so it is the
+  // source of truth — clients must not compute this themselves.
+  app.get('/api/archive/:id/path', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const doc = await archiveRepo.get(id)
+    if (!doc) return reply.code(404).send({ error: 'not found' })
+    return {
+      id: doc.id,
+      filename: doc.filename,
+      relPath: doc.relPath,
+      absolutePath: documentStore.absolutePath(doc.relPath),
+    }
+  })
   // Rename an archived document's display title (the file on disk is unchanged).
   app.patch('/api/archive/:id', async (req, reply) => {
     const { id } = req.params as { id: string }
