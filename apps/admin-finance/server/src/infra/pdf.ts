@@ -37,7 +37,9 @@ const printer = new PdfPrinter({
 })
 
 // ---- Design tokens ----------------------------------------------------------
-const NAVY = '#0A2540' // signature deep navy
+const NAVY = '#004B72' // Billit house blue — table headers, rules, accents
+const ORANGE = '#EF7D00' // Billit house orange — document titles
+const ZEBRA = '#F8F8F8' // alternating table row fill
 const INK = '#1A2230' // primary text
 const MUTED = '#8792A6' // secondary text
 const HAIR = '#E2E7EF' // hairline rules
@@ -60,10 +62,10 @@ const sectionLabel = (t: string, top = 20): Content => ({
 
 const th = (text: string, align: 'left' | 'right' | 'center' = 'left'): Content => ({
   text: text.toUpperCase(),
-  fontSize: 7,
+  fontSize: 8,
   bold: true,
-  color: MUTED,
-  characterSpacing: 0.8,
+  color: '#FFFFFF',
+  characterSpacing: 0.6,
   alignment: align,
 })
 
@@ -78,16 +80,16 @@ const td = (
   alignment: opts.align ?? 'left',
 })
 
-// Hairline table: navy rule under the header, faint rules between rows, no verticals.
+// House table: filled blue header (white uppercase), zebra data rows, no borders.
 const tableLayout = {
-  hLineWidth: (i: number, node: { table: { body: unknown[] } }) =>
-    i === 1 ? 1 : i === 0 || i === node.table.body.length ? 0 : 0.5,
+  hLineWidth: () => 0,
   vLineWidth: () => 0,
-  hLineColor: (i: number) => (i === 1 ? NAVY : HAIR),
-  paddingLeft: (i: number) => (i === 0 ? 0 : 6),
-  paddingRight: () => 6,
-  paddingTop: () => 7,
-  paddingBottom: () => 7,
+  fillColor: (rowIndex: number): string | null =>
+    rowIndex === 0 ? NAVY : rowIndex % 2 === 0 ? ZEBRA : null,
+  paddingLeft: () => 8,
+  paddingRight: () => 8,
+  paddingTop: () => 6,
+  paddingBottom: () => 6,
 }
 
 function masthead(s: Settings): Content[] {
@@ -102,7 +104,7 @@ function masthead(s: Settings): Content[] {
       {
         width: '*',
         stack: [
-          { text: c.name || 'Company', font: 'PlexSerif', color: NAVY, bold: true, fontSize: 15, characterSpacing: 0.4 },
+          { text: c.name || 'Company', font: 'Plex', color: NAVY, bold: true, fontSize: 15, characterSpacing: 0.4 },
           ...(addr ? [{ text: addr, fontSize: 8, color: MUTED, margin: [0, 4, 0, 0] } as Content] : []),
           ...(c.vatNumber ? [{ text: `VAT ${c.vatNumber}`, fontSize: 8, color: MUTED, margin: [0, 1, 0, 0] } as Content] : []),
         ],
@@ -123,7 +125,7 @@ function titleBlock(title: string, subtitle?: string, meta?: [string, string][])
       {
         width: '*',
         stack: [
-          { text: title, font: 'PlexSerif', fontSize: 26, bold: true, color: NAVY, characterSpacing: 0.2 },
+          { text: title, font: 'Plex', fontSize: 26, bold: true, color: ORANGE, characterSpacing: 0.2 },
           ...(subtitle ? [{ text: subtitle, fontSize: 11, color: MUTED, margin: [0, 4, 0, 0] } as Content] : []),
         ],
       },
@@ -171,17 +173,15 @@ function totalsBlock(rows: { label: string; value: string; strong?: boolean }[])
       text: r.label,
       fontSize: r.strong ? 10 : 9,
       bold: r.strong,
-      color: r.strong ? NAVY : MUTED,
+      color: r.strong ? '#FFFFFF' : MUTED,
       characterSpacing: r.strong ? 0.5 : 0,
-      margin: [0, r.strong ? 6 : 2, 0, r.strong ? 6 : 2],
     },
     {
       text: r.value,
-      fontSize: r.strong ? 13 : 9,
+      fontSize: r.strong ? 12 : 9,
       bold: r.strong,
-      color: r.strong ? NAVY : INK,
+      color: r.strong ? '#FFFFFF' : INK,
       alignment: 'right',
-      margin: [0, r.strong ? 6 : 2, 0, r.strong ? 6 : 2],
     },
   ])
   const lastStrong = rows.length - 1
@@ -192,13 +192,14 @@ function totalsBlock(rows: { label: string; value: string; strong?: boolean }[])
         width: 232,
         table: { widths: ['*', 'auto'], body },
         layout: {
-          hLineWidth: (i: number) => (i === lastStrong ? 1 : 0),
+          // Filled blue bar on the strong (total) row, like Billit's INCL. line.
+          fillColor: (i: number): string | null => (i === lastStrong ? NAVY : null),
+          hLineWidth: () => 0,
           vLineWidth: () => 0,
-          hLineColor: () => NAVY,
-          paddingLeft: () => 0,
-          paddingRight: () => 0,
-          paddingTop: () => 0,
-          paddingBottom: () => 0,
+          paddingLeft: () => 10,
+          paddingRight: () => 10,
+          paddingTop: (i: number) => (i === lastStrong ? 8 : 3),
+          paddingBottom: (i: number) => (i === lastStrong ? 8 : 3),
         },
       },
     ],
