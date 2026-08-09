@@ -19,7 +19,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node >= 21 required: @af/core's test script passes a glob
+          # (node --test test/*.test.ts), which the test runner only expands
+          # from 21 onward. Match the app's local runtime (24).
+          node-version: 24
           cache: npm
           cache-dependency-path: apps/admin-finance/package-lock.json
       - run: npm ci
