@@ -11,6 +11,7 @@ import {
   parseCoda,
   parsePeriodKey,
   reconcile,
+  ublInvoice,
   SettingsSchema,
   TimesheetSchema,
   ExpenseNoteSchema,
@@ -224,6 +225,20 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       invoiceCount: invoices.length,
       content: accountingCsv(invoices, customers),
     }
+  })
+
+  // UBL invoice (Peppol BIS 3.0 shape) — a structured e-invoice XML to upload
+  // into Billit. Prepared locally; Billit does the actual sending.
+  app.get('/api/invoices/:id/ubl', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const inv = await invoiceRepo.get(id)
+    if (!inv) return reply.code(404).send({ error: 'not found' })
+    const customer = (await customerRepo.list()).find((c) => c.id === inv.customerId)
+    if (!customer) return reply.code(409).send({ error: 'invoice has no matching customer' })
+    const settings = await settingsRepo.get()
+    reply.header('Content-Type', 'application/xml')
+    reply.header('Content-Disposition', `attachment; filename="invoice-${inv.number}.xml"`)
+    return reply.send(ublInvoice(inv, customer, settings.company))
   })
 
   // Everything an accountant needs for a quarter's VAT processing, as one ZIP

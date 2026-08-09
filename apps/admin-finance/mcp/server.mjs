@@ -222,6 +222,16 @@ const handlers = {
     }
     return api('POST', '/api/reconcile', { coda })
   },
+
+  finance_export_ubl: async ({ id, outputDir }) => {
+    const inv = await api('GET', `/api/invoices/${encodeURIComponent(id)}`)
+    const xml = await api('GET', `/api/invoices/${encodeURIComponent(id)}/ubl`)
+    const filename = `invoice-${inv.number}.xml`
+    await mkdir(outputDir, { recursive: true })
+    const dest = join(outputDir, filename)
+    await writeFile(dest, xml, 'utf8')
+    return { path: dest, filename, number: inv.number, sizeBytes: Buffer.byteLength(xml) }
+  },
 }
 
 // ---- tool catalog advertised to the agent ----
@@ -257,6 +267,7 @@ const TOOLS = [
   { name: 'finance_export_accounting', description: 'Export invoices as a generic, import-mappable accounting CSV (a sales journal) for the owner to import into Exact/Yuki/Odoo. Optionally filter by period (YYYY-MM). With outputDir, writes the .csv there and returns its path; otherwise returns the CSV content. Produces a LOCAL file only — it never pushes to any accounting system.', inputSchema: obj({ period: { ...S.string, description: 'Optional period filter YYYY-MM; omit for all invoices.' }, outputDir: { ...S.string, description: 'Optional absolute directory to write the .csv into.' } }, []), annotations: writes('Export accounting CSV') },
   { name: 'finance_prepare_quarter_package', description: 'Bundle everything the accountant needs for a quarter\'s VAT processing into one local ZIP — every invoice + expense-note PDF, the accounting CSV, and a VAT summary — written into a folder the agent controls. A local hand-off file; it is never sent anywhere.', inputSchema: obj({ quarter: { ...S.string, description: 'Quarter, formatted YYYY-Qn (e.g. 2026-Q3).' }, outputDir: { ...S.string, description: 'Absolute directory to write the .zip into.' } }, ['quarter', 'outputDir']), annotations: writes('Prepare quarter package') },
   { name: 'finance_reconcile', description: 'Reconcile a Belgian CODA bank statement (.cod) against invoices and expenses. Matches income to invoices by the structured reference (+++…+++) and spending to expense items by amount, and flags anything without a supporting document: unexplained credits (income with no invoice), unpaid invoices, and unexplained debits. Reads the .cod locally — no bank connection, no credentials, nothing sent.', inputSchema: obj({ codaPath: { ...S.string, description: 'Absolute path to the .cod bank statement file.' } }, ['codaPath']), annotations: writes('Reconcile bank statement') },
+  { name: 'finance_export_ubl', description: 'Export an invoice as a UBL (Peppol BIS 3.0) e-invoice XML into a folder the agent controls, ready to upload into Billit for sending. Prepares the file locally only — it does not send the invoice.', inputSchema: obj({ id: { ...S.string, description: 'Invoice id.' }, outputDir: { ...S.string, description: 'Absolute directory to write the .xml into.' } }, ['id', 'outputDir']), annotations: writes('Export UBL invoice') },
 ]
 
 // ---- JSON-RPC dispatch ----

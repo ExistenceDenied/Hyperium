@@ -64,4 +64,6 @@ as a generic accounting CSV to import into Exact/Yuki/Odoo — a local file, nev
 pushed), `finance_prepare_quarter_package` (bundle a quarter's invoice + expense
 PDFs, the accounting CSV and a VAT summary into one local ZIP for the accountant),
 `finance_reconcile` (match a CODA bank statement against invoices/expenses and
-flag anything without a supporting document — local, no bank connection).
+flag anything without a supporting document — local, no bank connection),
+`finance_export_ubl` (export an invoice as a UBL/Peppol XML to upload into Billit
+for sending — prepared locally, never sent from here).

@@ -350,6 +350,37 @@ test('POST /api/reconcile parses a CODA statement into a reconciliation report',
   assert.equal(bad.status, 400)
 })
 
+// ---- UBL e-invoice export (for upload into Billit) --------------------------
+test('GET /api/invoices/:id/ubl returns a UBL XML invoice', async () => {
+  await api('POST', '/api/customers', {
+    id: 'ubl-c1',
+    company: 'UBL Test NV',
+    addressLines: ['Teststraat 1', '1000 Brussel'],
+    vatNumber: 'BE0999888777',
+    defaultDayRate: 1000,
+    defaultHourlyRate: 100,
+    paymentTermsDays: 30,
+    vatTreatment: 'standard',
+  })
+  const inv = await api('POST', '/api/invoices', {
+    customerId: 'ubl-c1',
+    date: '2033-03-03',
+    extraLines: [{ description: 'Advisory', quantity: 2, unit: 'day', unitPrice: 1000 }],
+  })
+  assert.equal(inv.status, 200)
+
+  const res = await app.inject({ method: 'GET', url: `/api/invoices/${inv.body.id}/ubl` })
+  assert.equal(res.statusCode, 200)
+  assert.ok(String(res.headers['content-type']).includes('xml'))
+  assert.ok(res.payload.startsWith('<?xml'))
+  assert.ok(res.payload.includes(`<cbc:ID>${inv.body.number}</cbc:ID>`))
+  assert.ok(res.payload.includes('UBL Test NV'))
+  assert.ok(res.payload.includes('BE0999888777'))
+
+  const missing = await app.inject({ method: 'GET', url: '/api/invoices/nope/ubl' })
+  assert.equal(missing.statusCode, 404)
+})
+
 // ---- customer CRUD (must never disturb the invoice counter) -----------------
 test('customer create / update / delete leave nextInvoiceSeq untouched', async () => {
   // Advance the counter first so we can prove customer writes don't rewind it.

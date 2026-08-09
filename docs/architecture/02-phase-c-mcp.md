@@ -85,6 +85,7 @@ approval gate (mutates local state or writes a file). Nothing is destructive.
 | `finance_export_accounting` | EXPORT | `GET /api/exports/accounting` → local CSV, never pushed | ❌ |
 | `finance_prepare_quarter_package` | EXPORT | `GET /api/exports/quarter/:q` → local ZIP for the accountant | ❌ |
 | `finance_reconcile` | RECONCILE | `POST /api/reconcile` (parses a local CODA; no bank connection) | ❌ |
+| `finance_export_ubl` | EXPORT | `GET /api/invoices/:id/ubl` → local UBL/Peppol XML to upload into Billit | ❌ |
 
 Deliberately **excluded**: every `DELETE`, `PUT /api/settings` (company config is
 not agent scope), and anything resembling send/pay (none exists).

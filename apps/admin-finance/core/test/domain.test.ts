@@ -26,6 +26,7 @@ import {
   monthlyDashboard,
   parseCoda,
   reconcile,
+  ublInvoice,
   type Company,
   type Customer,
   type Timesheet,
@@ -345,4 +346,30 @@ test('reconcile matches income by structured reference and flags the rest', () =
   assert.equal(r.unexplainedDebits[0]!.amount, 999.99)
   assert.equal(r.totals.credits, 3948.5) // 3448.5 + 500
   assert.equal(r.totals.debits, 1339.14) // 339.15 + 999.99
+})
+
+// ---- UBL (Peppol) e-invoice -------------------------------------------------
+test('ublInvoice renders a Peppol-shaped UBL invoice with the right totals', () => {
+  const inv: Invoice = buildInvoice({
+    id: 'u1',
+    year: 2026,
+    seq: 7,
+    date: '2026-07-31',
+    company,
+    customer,
+    extraLines: [{ description: 'Consulting', quantity: 1, unit: 'day', unitPrice: 2850 }],
+    standardVatRatePct: 21,
+    createdAt: '2026-07-31T00:00:00Z',
+  })
+  const xml = ublInvoice(inv, customer, company)
+  assert.ok(xml.startsWith('<?xml'))
+  assert.match(xml, /<Invoice[\s>]/)
+  assert.ok(xml.includes('urn:cen.eu:en16931')) // Peppol BIS 3.0 customization
+  assert.ok(xml.includes(`<cbc:ID>${inv.number}</cbc:ID>`))
+  assert.ok(xml.includes('<cbc:IssueDate>2026-07-31</cbc:IssueDate>'))
+  assert.ok(xml.includes('<cbc:Percent>21</cbc:Percent>'))
+  assert.ok(xml.includes('<cbc:TaxInclusiveAmount currencyID="EUR">3448.50</cbc:TaxInclusiveAmount>'))
+  assert.ok(xml.includes('<cbc:PayableAmount currencyID="EUR">3448.50</cbc:PayableAmount>'))
+  assert.ok(xml.includes(`<cbc:PaymentID>${inv.structuredReference}</cbc:PaymentID>`))
+  assert.ok(xml.includes('<cac:InvoiceLine>'))
 })
