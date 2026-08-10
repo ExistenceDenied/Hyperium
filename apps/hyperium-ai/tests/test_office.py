@@ -113,6 +113,38 @@ def test_untemplated_pptx_titles_use_inter():
     assert fonts and all(name == "Inter" for name in fonts)
 
 
+def test_untemplated_docx_embeds_inter():
+    import zipfile
+
+    from docx import Document
+
+    data = to_docx("Report Title", SAMPLE)
+    archive = zipfile.ZipFile(io.BytesIO(data))
+    names = archive.namelist()
+    assert any(n.startswith("word/fonts/") and n.endswith(".odttf") for n in names)
+    assert "embedTrueTypeFonts" in archive.read("word/settings.xml").decode()
+    assert 'w:name="Inter"' in archive.read("word/fontTable.xml").decode()
+    # still a valid, readable document after embedding
+    text = "\n".join(p.text for p in Document(io.BytesIO(data)).paragraphs)
+    assert "Report Title" in text
+
+
+def test_untemplated_pptx_embeds_inter():
+    import zipfile
+
+    from pptx import Presentation
+
+    data = to_pptx("Deck", SLIDES)
+    archive = zipfile.ZipFile(io.BytesIO(data))
+    names = archive.namelist()
+    assert any(n.startswith("ppt/fonts/") and n.endswith(".fntdata") for n in names)
+    presentation_xml = archive.read("ppt/presentation.xml").decode()
+    assert "embedTrueTypeFonts" in presentation_xml
+    assert "<p:embeddedFontLst>" in presentation_xml and 'typeface="Inter"' in presentation_xml
+    # still a valid, readable presentation after embedding
+    assert Presentation(io.BytesIO(data)).slides is not None
+
+
 def test_to_eml_is_a_readable_draft_with_both_body_parts():
     import email
 

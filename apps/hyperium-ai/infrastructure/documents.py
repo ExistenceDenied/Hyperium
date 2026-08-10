@@ -16,6 +16,8 @@ import io
 import re
 from pathlib import Path
 
+from infrastructure.font_embed import embed_docx_fonts, embed_pptx_fonts
+
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)")
 _BULLET = re.compile(r"^\s*[-*+]\s+")
 _NUMBER = re.compile(r"^\s*\d+\.\s+")
@@ -191,7 +193,8 @@ def to_docx(title: str, markdown: str, template=None) -> bytes:
 
     buffer = io.BytesIO()
     document.save(buffer)
-    return buffer.getvalue()
+    data = buffer.getvalue()
+    return embed_docx_fonts(data) if use is None else data  # embed Inter when on-brand
 
 
 def _slidify(blocks) -> list[tuple[str | None, list[str], list[str]]]:
@@ -340,4 +343,5 @@ def to_pptx(title: str, markdown: str, template=None) -> bytes:
 
     buffer = io.BytesIO()
     presentation.save(buffer)
-    return buffer.getvalue()
+    data = buffer.getvalue()
+    return embed_pptx_fonts(data) if branded else data  # embed Inter when on-brand
