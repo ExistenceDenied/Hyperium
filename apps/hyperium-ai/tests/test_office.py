@@ -89,6 +89,30 @@ def test_to_pptx_produces_one_slide_per_heading():
     assert any("keep it short" in note for note in notes)
 
 
+def test_untemplated_docx_uses_the_hyperium_brand():
+    from docx import Document
+
+    document = Document(io.BytesIO(to_docx("Report Title", SAMPLE)))
+    assert document.styles["Normal"].font.name == "Inter"
+    heading = document.styles["Heading 1"].font
+    assert heading.name == "Inter"
+    assert str(heading.color.rgb) == "101828"  # Midnight Navy
+
+
+def test_untemplated_pptx_titles_use_inter():
+    from pptx import Presentation
+
+    presentation = Presentation(io.BytesIO(to_pptx("Deck", SLIDES)))
+    fonts = [
+        run.font.name
+        for slide in presentation.slides
+        if slide.shapes.title is not None
+        for paragraph in slide.shapes.title.text_frame.paragraphs
+        for run in paragraph.runs
+    ]
+    assert fonts and all(name == "Inter" for name in fonts)
+
+
 def test_to_eml_is_a_readable_draft_with_both_body_parts():
     import email
 

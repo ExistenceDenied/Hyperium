@@ -29,6 +29,48 @@ class OfficeUnavailable(RuntimeError):
     """The optional office dependency is not installed."""
 
 
+# Hyperium brand defaults for blank (untemplated) documents — see
+# docs/brand-styleguide.md. Inter is the corporate typeface; the palette below is
+# the brand's. When a template is supplied, its own theme/fonts win instead.
+_BRAND_FONT = "Inter"
+_NAVY = (0x10, 0x18, 0x28)  # Midnight Navy — titles / headings
+_INK = (0x1A, 0x22, 0x30)  # body text
+
+
+def _apply_docx_brand(document) -> None:
+    """Set Inter + the Hyperium palette on a blank .docx's built-in styles."""
+    from docx.shared import Pt, RGBColor
+
+    styles = document.styles
+    normal = styles["Normal"]
+    normal.font.name = _BRAND_FONT
+    normal.font.size = Pt(11)
+    normal.font.color.rgb = RGBColor(*_INK)
+    for name, size in (("Title", 26), ("Heading 1", 20), ("Heading 2", 15), ("Heading 3", 13)):
+        try:
+            style = styles[name]
+        except KeyError:
+            continue
+        style.font.name = _BRAND_FONT
+        style.font.bold = True
+        style.font.size = Pt(size)
+        style.font.color.rgb = RGBColor(*_NAVY)
+
+
+def _style_pptx_runs(text_frame, *, title: bool) -> None:
+    """Apply Inter (+ navy for titles) to the runs of a slide text frame."""
+    from pptx.dml.color import RGBColor
+    from pptx.util import Pt
+
+    for paragraph in text_frame.paragraphs:
+        for run in paragraph.runs:
+            run.font.name = _BRAND_FONT
+            if title:
+                run.font.bold = True
+                run.font.size = Pt(28)
+                run.font.color.rgb = RGBColor(*_NAVY)
+
+
 def _cells(line: str) -> list[str]:
     return [cell.strip() for cell in line.strip().strip("|").split("|")]
 
@@ -121,6 +163,8 @@ def to_docx(title: str, markdown: str, template=None) -> bytes:
 
     use = str(template) if template and Path(template).is_file() else None
     document = Document(use) if use else Document()
+    if use is None:
+        _apply_docx_brand(document)  # on-brand even without a template
     document.add_heading(title, level=0)
 
     for kind, payload in parse_blocks(markdown):
@@ -262,16 +306,23 @@ def to_pptx(title: str, markdown: str, template=None) -> bytes:
 
     use = str(template) if template and Path(template).is_file() else None
     presentation = Presentation(use) if use else Presentation()
+    branded = use is None  # no template -> apply the Hyperium brand ourselves
     _clear_slides(presentation)
+
+    def _brand_title(slide) -> None:
+        if branded and slide.shapes.title is not None:
+            _style_pptx_runs(slide.shapes.title.text_frame, title=True)
 
     layouts = presentation.slide_layouts
     opening = presentation.slides.add_slide(layouts[0])
     _set_title(opening, title)
+    _brand_title(opening)
 
     content_layout = layouts[1] if len(layouts) > 1 else layouts[0]
     for slide_title, bullets, notes in _slidify(parse_blocks(markdown)):
         slide = presentation.slides.add_slide(content_layout)
         _set_title(slide, slide_title or title)
+        _brand_title(slide)
 
         frame = _body_frame(slide)
         if frame is not None:
@@ -281,6 +332,8 @@ def to_pptx(title: str, markdown: str, template=None) -> bytes:
                     frame.paragraphs[0] if index == 0 else frame.add_paragraph()
                 )
                 paragraph.text = bullet
+            if branded:
+                _style_pptx_runs(frame, title=False)
 
         if notes:
             slide.notes_slide.notes_text_frame.text = "\n".join(notes)

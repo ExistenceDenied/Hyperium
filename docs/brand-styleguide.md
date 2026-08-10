@@ -61,7 +61,7 @@ recolour, or add effects/shadows.
 | **PDF** (invoices, timesheets, expenses) | Inter **embedded** (subset) | `apps/admin-finance/server/src/infra/pdf.ts` + `server/assets/fonts/Inter-*.ttf` |
 | **Word (.docx)** | Inter **embedded** (ODTTF) | `server/src/infra/word.ts` + `server/src/infra/embedFonts.ts` |
 | **Web** (React/Vite) | Inter via `@fontsource/inter`; Tailwind `font-sans: Inter, Arial, sans-serif` | `apps/admin-finance/web/src/main.tsx`, `web/tailwind.config.js` |
-| **PowerPoint / Hyperium OS** | uses the same palette + Inter naming | `apps/hyperium-ai` Office generation — align to Inter as a follow-up |
+| **PowerPoint & Word (Hyperium OS / hyperium-ai)** | Inter + Midnight-Navy applied in code for **untemplated** decks/docs; a supplied template keeps its own theme | `apps/hyperium-ai/infrastructure/documents.py` |
 
 The font files live once in `server/assets/fonts/` (Inter-Regular / Medium /
 SemiBold + italics, latin subset) and are converted from the OFL `@fontsource`
