@@ -67,3 +67,18 @@ The font files live once in `server/assets/fonts/` (Inter-Regular / Medium /
 SemiBold + italics, latin subset) and are converted from the OFL `@fontsource`
 distribution. Changing a colour or weight is a token edit at the top of each
 generator (`pdf.ts` / `word.ts`).
+
+## Governance & ownership (where this fits)
+
+This standard is a component — **Brand & Corporate Identity** (band ENABLE) — of
+**Capability 07 · Platform, Knowledge & Trust** in Hyperium's operating model. It's
+the *Trust* leg made concrete on the *Platform* leg's rendering infrastructure, and
+it's consumed horizontally by every output-producing capability (01–06).
+
+The operating-model registration (component charter + this standard as a data
+contract) lives at `Hyperium IP/Intelligence Engine/brand-identity/`. This code
+repo holds the **implementation**; that folder is the **paper-twin anchor** so the
+two stay in sync. Changes are **owner-approved** — the identity reaches
+client-facing surfaces, so it inherits the firm rule *client-facing content is
+capped at L1*.
+
